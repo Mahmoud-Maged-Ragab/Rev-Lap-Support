@@ -1,0 +1,12 @@
+node_modules
+.next
+out
+.env
+.env.local
+.env*.local
+# SQLite leftovers (project is on Postgres but keep these out just in case)
+*.db
+*.db-journal
+prisma/dev.db*
+.DS_Store
+*.log
