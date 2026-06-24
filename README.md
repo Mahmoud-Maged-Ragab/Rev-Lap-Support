@@ -1,6 +1,6 @@
 # Support Knowledge Base
 
-Internal support / knowledge base for documenting issues, error messages, causes, and fixes — with a searchable public side and a secured admin side for CRUD.
+Internal support / knowledge base for documenting issues, error messages, and fixes — with a searchable public side and a secured admin side for CRUD.
 
 ## Stack
 
@@ -148,8 +148,8 @@ Open <http://localhost:3000>. Admin sign-in is at <http://localhost:3000/admin/l
 1. **Admin logs in** — visit `/admin/login`, submit seed credentials. The `/api/auth/login` route checks the bcrypt hash and writes a signed HTTP-only JWT cookie. Middleware then permits `/admin/*`.
 2. **Admin creates an issue** — `/admin/issues/new` posts JSON to `POST /api/issues`. Zod validates input; `createIssue()` generates a unique slug, upserts tags, and writes the issue.
 3. **Issue saves to database** — Prisma persists `Issue` + `IssueTag` join rows in one transaction. The admin is redirected back to `/admin`, which re-fetches via `listIssues()`.
-4. **User searches issue** — public homepage `/` calls `listIssues()` server-side. The query searches `title`, `description`, `errorMessage`, `cause`, `solution`, `category.name`, and `tag.name`. Filters: category, tag. Sorts: newest, oldest, most viewed.
-5. **User opens solution page** — `/issues/[slug]` server-renders the full issue (problem, error, cause, solution, screenshots, tags, category, dates). View count increments asynchronously.
+4. **User searches issue** — public homepage `/` calls `listIssues()` server-side. The query searches `title`, `description`, `errorMessage`, `solution`, `category.name`, and `tag.name`. Filters: category, tag. Sorts: newest, oldest, most viewed.
+5. **User opens solution page** — `/issues/[slug]` server-renders the full issue (problem, error, solution, screenshots, tags, category, dates). View count increments asynchronously.
 
 ## Security model
 

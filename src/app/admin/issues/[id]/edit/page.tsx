@@ -29,7 +29,6 @@ export default async function EditIssuePage({ params }: { params: { id: string }
           title: issue.title,
           description: issue.description,
           errorMessage: issue.errorMessage,
-          cause: issue.cause,
           solution: issue.solution,
           categoryId: issue.categoryId,
           tags: issue.tags.map((t) => ({ id: t.id, name: t.name })),

@@ -42,7 +42,6 @@ type IssueRow = {
   slug: string;
   description: string;
   errorMessage: string | null;
-  cause: string | null;
   solution: string;
   images: string;
   videoUrl: string | null;
@@ -58,7 +57,7 @@ const ISSUE_LIST_SELECT =
   "id,title,slug,description,views,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name))";
 
 const ISSUE_FULL_SELECT =
-  "id,title,slug,description,errorMessage,cause,solution,images,videoUrl,views,categoryId,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name))";
+  "id,title,slug,description,errorMessage,solution,images,videoUrl,views,categoryId,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name))";
 
 function generateId(): string {
   // cuid-shaped opaque string id: timestamp prefix + 16 hex chars of entropy.
@@ -140,7 +139,6 @@ export async function listIssues(
       `title.ilike.${pat}`,
       `description.ilike.${pat}`,
       `errorMessage.ilike.${pat}`,
-      `cause.ilike.${pat}`,
       `solution.ilike.${pat}`,
     ];
 
@@ -200,7 +198,6 @@ function mapIssueFull(r: IssueRow) {
     slug: r.slug,
     description: r.description,
     errorMessage: r.errorMessage,
-    cause: r.cause,
     solution: r.solution,
     videoUrl: r.videoUrl,
     views: r.views,
@@ -303,7 +300,6 @@ export async function createIssue(input: IssueInput) {
       slug,
       description: input.description,
       errorMessage: input.errorMessage ?? null,
-      cause: input.cause ?? null,
       solution: input.solution,
       images: input.images ?? [],
       videoUrl: input.videoUrl ?? null,
@@ -336,7 +332,6 @@ export async function updateIssue(id: string, input: IssueInput) {
       title: input.title,
       description: input.description,
       errorMessage: input.errorMessage ?? null,
-      cause: input.cause ?? null,
       solution: input.solution,
       images: JSON.stringify(input.images ?? []),
       videoUrl: input.videoUrl ?? null,

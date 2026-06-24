@@ -13,7 +13,11 @@ function fmt(d: Date | string) {
   });
 }
 
-export default async function IssuePage({ params }: { params: { slug: string } }) {
+export default async function IssuePage({
+  params,
+}: {
+  params: { slug: string };
+}) {
   const issue = await getIssueBySlug(params.slug);
   if (!issue) notFound();
 
@@ -24,11 +28,16 @@ export default async function IssuePage({ params }: { params: { slug: string } }
     <article className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_240px]">
       <div className="min-w-0 space-y-6">
         <nav className="text-xs text-slate-500">
-          <Link href="/" className="hover:text-ink-900">All issues</Link>
+          <Link href="/" className="hover:text-ink-900">
+            All issues
+          </Link>
           {issue.category && (
             <>
               <span className="mx-1.5">/</span>
-              <Link href={`/?category=${issue.category.id}`} className="hover:text-ink-900">
+              <Link
+                href={`/?category=${issue.category.id}`}
+                className="hover:text-ink-900"
+              >
                 {issue.category.name}
               </Link>
             </>
@@ -36,7 +45,9 @@ export default async function IssuePage({ params }: { params: { slug: string } }
         </nav>
 
         <header className="space-y-2 border-b border-slate-200 pb-5">
-          <h1 className="text-2xl font-semibold tracking-tight">{issue.title}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">
+            {issue.title}
+          </h1>
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span>Created {fmt(issue.createdAt)}</span>
             <span>·</span>
@@ -64,15 +75,6 @@ export default async function IssuePage({ params }: { params: { slug: string } }
           </section>
         )}
 
-        {issue.cause && (
-          <section className="prose-kb space-y-2">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Cause
-            </h2>
-            <p className="whitespace-pre-wrap">{issue.cause}</p>
-          </section>
-        )}
-
         <section className="prose-kb space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Solution
@@ -97,15 +99,33 @@ export default async function IssuePage({ params }: { params: { slug: string } }
               Screenshots
             </h2>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {issue.images.map((src, i) => (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  key={i}
-                  src={src}
-                  alt={`Screenshot ${i + 1}`}
-                  className="rounded-md border border-slate-200"
-                />
-              ))}
+              {issue.images.map((src, i) => {
+                const cleanUrl = src.split("?")[0].split("#")[0];
+                const isPdf = cleanUrl.toLowerCase().endsWith(".pdf");
+
+                if (isPdf) {
+                  return (
+                    <a
+                      key={i}
+                      href={src}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block rounded-md border border-slate-200 p-3 text-sm text-blue-600 hover:underline"
+                    >
+                      📄 View PDF {i + 1}
+                    </a>
+                  );
+                }
+
+                return (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`Screenshot ${i + 1}`}
+                    className="rounded-md border border-slate-200"
+                  />
+                );
+              })}
             </div>
           </section>
         )}
@@ -118,7 +138,10 @@ export default async function IssuePage({ params }: { params: { slug: string } }
           </div>
           <div className="mt-1.5">
             {issue.category ? (
-              <Link href={`/?category=${issue.category.id}`} className="text-ink-900 hover:underline">
+              <Link
+                href={`/?category=${issue.category.id}`}
+                className="text-ink-900 hover:underline"
+              >
                 {issue.category.name}
               </Link>
             ) : (
@@ -131,9 +154,15 @@ export default async function IssuePage({ params }: { params: { slug: string } }
             Tags
           </div>
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {issue.tags.length === 0 && <span className="text-slate-500">—</span>}
+            {issue.tags.length === 0 && (
+              <span className="text-slate-500">—</span>
+            )}
             {issue.tags.map((t) => (
-              <Link key={t.id} href={`/?tag=${t.id}`} className="chip hover:bg-slate-200">
+              <Link
+                key={t.id}
+                href={`/?tag=${t.id}`}
+                className="chip hover:bg-slate-200"
+              >
                 {t.name}
               </Link>
             ))}

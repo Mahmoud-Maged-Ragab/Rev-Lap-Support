@@ -9,7 +9,6 @@ export const IssueInputSchema = z.object({
   title: z.string().min(3).max(200),
   description: z.string().min(5).max(10_000),
   errorMessage: z.string().max(5_000).optional().nullable(),
-  cause: z.string().max(5_000).optional().nullable(),
   solution: z.string().min(5).max(20_000),
   categoryId: z.string().optional().nullable(),
   // Accept either a comma string or array of tag NAMES (legacy)
