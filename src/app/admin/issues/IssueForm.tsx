@@ -88,12 +88,20 @@ export function IssueForm({
   }
 
   function isPdfUrl(url: string) {
-    const clean = url.split("?")[0].split("#")[0];
-    return clean.toLowerCase().endsWith(".pdf");
+    try {
+      const clean = new URL(url).pathname;
+      return clean.toLowerCase().endsWith(".pdf");
+    } catch {
+      return false;
+    }
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (uploading) {
+      setError("Please wait for uploads to finish before saving.");
+      return;
+    }
     if (selectedTagIds.size === 0) {
       setError("Please select at least one tag.");
       return;
@@ -322,7 +330,7 @@ export function IssueForm({
           {saving ? "Saving…" : isEdit ? "Save changes" : "Create issue"}
         </button>
         <button type="button" onClick={() => router.back()} className="btn">
-          Cancel
+          Cancelsdad
         </button>
       </div>
     </form>

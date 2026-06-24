@@ -301,7 +301,7 @@ export async function createIssue(input: IssueInput) {
       description: input.description,
       errorMessage: input.errorMessage ?? null,
       solution: input.solution,
-      images: input.images ?? [],
+      images: JSON.stringify(input.images ?? []),
       videoUrl: input.videoUrl ?? null,
       views: 0,
       categoryId: input.categoryId || null,

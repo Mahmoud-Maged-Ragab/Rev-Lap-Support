@@ -7,7 +7,11 @@ export const dynamic = "force-dynamic";
 
 type Row = { id: string; name: string };
 
-export default async function EditIssuePage({ params }: { params: { id: string } }) {
+export default async function EditIssuePage({
+  params,
+}: {
+  params: { id: string };
+}) {
   const [issue, categories, allTags] = await Promise.all([
     getIssueById(params.id),
     selectAll<Row>("categories", { select: "id,name", order: "name.asc" }),

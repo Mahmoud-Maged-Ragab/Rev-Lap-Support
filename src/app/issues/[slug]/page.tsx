@@ -74,7 +74,6 @@ export default async function IssuePage({
             </pre>
           </section>
         )}
-
         <section className="prose-kb space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             Solution

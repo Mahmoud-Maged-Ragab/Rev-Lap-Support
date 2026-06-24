@@ -14,25 +14,34 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await readSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   let body: unknown;
-  try { body = await req.json(); } catch { return NextResponse.json({ error: "Invalid JSON" }, { status: 400 }); }
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
 
   const parsed = TagInputSchema.safeParse(body);
-  if (!parsed.success) return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+  if (!parsed.success)
+    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
 
   const name = parsed.data.name.trim().toLowerCase();
   try {
     const rows = await insertRow<{ id: string; name: string }>(
       "tags",
       { id: generateId(), name },
-      { select: "id,name" }
+      { select: "id,name" },
     );
     return NextResponse.json(rows[0], { status: 201 });
   } catch (err) {
     if (err instanceof SupabaseError && err.status === 409) {
-      return NextResponse.json({ error: "Tag already exists" }, { status: 409 });
+      return NextResponse.json(
+        { error: "Tag already exists" },
+        { status: 409 },
+      );
     }
     return NextResponse.json({ error: "Tag already exists" }, { status: 409 });
   }
