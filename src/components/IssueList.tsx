@@ -31,9 +31,9 @@ export function IssueList({ items }: { items: IssueListItem[] }) {
                   {i.tags.slice(0, 4).map((t) => (
                     <span key={t.id} className="chip">{t.name}</span>
                   ))}
-                  {i.creator ? (
+                  {/* {i.creator ? (
                     <span className="chip">Created by {i.creator.email}</span>
-                  ) : null}
+                  ) : null} */}
                 </div>
               </div>
               <div className="shrink-0 text-right text-xs text-slate-500">
