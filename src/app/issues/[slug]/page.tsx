@@ -13,6 +13,45 @@ function fmt(d: Date | string) {
   });
 }
 
+function isGoogleDrivePdfUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host !== "drive.google.com") return false;
+    if (u.pathname.startsWith("/file/d/")) return true;
+    return u.pathname === "/open" || u.pathname === "/uc";
+  } catch {
+    return false;
+  }
+}
+
+function getGoogleDrivePreviewUrl(url: string): string {
+  try {
+    const u = new URL(url);
+    if (u.hostname.replace(/^www\./, "") !== "drive.google.com") return url;
+    if (u.pathname.startsWith("/file/d/")) {
+      const parts = u.pathname.split("/");
+      const id = parts[3];
+      return id ? `https://drive.google.com/file/d/${id}/preview` : url;
+    }
+    const id = u.searchParams.get("id");
+    return id ? `https://drive.google.com/file/d/${id}/preview` : url;
+  } catch {
+    return url;
+  }
+}
+
+function isPdfUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    const pathname = u.pathname.toLowerCase();
+    if (pathname.endsWith(".pdf")) return true;
+    return isGoogleDrivePdfUrl(url);
+  } catch {
+    return false;
+  }
+}
+
 export default async function IssuePage({
   params,
 }: {
@@ -95,34 +134,23 @@ export default async function IssuePage({
         {issue.images.length > 0 && (
           <section className="space-y-2">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              Screenshots
+              Attachments
             </h2>
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <div className="space-y-2">
               {issue.images.map((src, i) => {
-                const cleanUrl = src.split("?")[0].split("#")[0];
-                const isPdf = cleanUrl.toLowerCase().endsWith(".pdf");
-
-                if (isPdf) {
-                  return (
-                    <a
-                      key={i}
-                      href={src}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block rounded-md border border-slate-200 p-3 text-sm text-blue-600 hover:underline"
-                    >
-                      📄 View PDF {i + 1}
-                    </a>
-                  );
-                }
-
+                const previewUrl = isGoogleDrivePdfUrl(src)
+                  ? getGoogleDrivePreviewUrl(src)
+                  : src;
                 return (
-                  <img
+                  <a
                     key={i}
-                    src={src}
-                    alt={`Screenshot ${i + 1}`}
-                    className="rounded-md border border-slate-200"
-                  />
+                    href={previewUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-md border border-slate-200 p-3 text-sm text-blue-600 hover:bg-slate-50 hover:underline"
+                  >
+                    📄 View PDF {i + 1}
+                  </a>
                 );
               })}
             </div>

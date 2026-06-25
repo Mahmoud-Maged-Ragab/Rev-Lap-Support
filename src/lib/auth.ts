@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 
 const COOKIE = "kb_session";
 const ALG = "HS256";
+const CLOCK_TOLERANCE_SECONDS = 30;
 
 function secret(): Uint8Array {
   const s = process.env.AUTH_SECRET;
@@ -10,6 +11,13 @@ function secret(): Uint8Array {
     throw new Error("AUTH_SECRET must be set (>=32 chars). See .env.example.");
   }
   return new TextEncoder().encode(s);
+}
+
+function verifyOptions() {
+  return {
+    algorithms: [ALG] as string[],
+    clockTolerance: CLOCK_TOLERANCE_SECONDS,
+  };
 }
 
 export type Role = "ADMIN" | "SUPPORT";
@@ -58,7 +66,7 @@ export async function readSession(token?: string): Promise<SessionPayload | null
   const raw = token ?? cookies().get(COOKIE)?.value;
   if (!raw) return null;
   try {
-    const { payload } = await jwtVerify(raw, secret(), { algorithms: [ALG] });
+    const { payload } = await jwtVerify(raw, secret(), verifyOptions());
     return payload as SessionPayload;
   } catch {
     return null;
@@ -67,7 +75,7 @@ export async function readSession(token?: string): Promise<SessionPayload | null
 
 export async function verifyToken(token: string): Promise<SessionPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, secret(), { algorithms: [ALG] });
+    const { payload } = await jwtVerify(token, secret(), verifyOptions());
     return payload as SessionPayload;
   } catch {
     return null;

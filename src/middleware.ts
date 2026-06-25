@@ -3,13 +3,17 @@ import type { NextRequest } from "next/server";
 import { jwtVerify } from "jose";
 
 const ALG = "HS256";
+const CLOCK_TOLERANCE_SECONDS = 30;
 
 async function isValid(token: string | undefined): Promise<boolean> {
   if (!token) return false;
   const secret = process.env.AUTH_SECRET;
   if (!secret) return false;
   try {
-    await jwtVerify(token, new TextEncoder().encode(secret), { algorithms: [ALG] });
+    await jwtVerify(token, new TextEncoder().encode(secret), {
+      algorithms: [ALG],
+      clockTolerance: CLOCK_TOLERANCE_SECONDS,
+    });
     return true;
   } catch {
     return false;

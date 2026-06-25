@@ -22,6 +22,28 @@ function parseYouTubeId(url: string): string | null {
   }
 }
 
+function parseGoogleDriveId(url: string): string | null {
+  try {
+    const u = new URL(url);
+    const host = u.hostname.replace(/^www\./, "");
+    if (host !== "drive.google.com" && host !== "docs.google.com") {
+      return null;
+    }
+    if (u.pathname.startsWith("/file/d/")) {
+      const parts = u.pathname.split("/");
+      const id = parts[3];
+      return id && /^[\w-]{10,}$/.test(id) ? id : null;
+    }
+    if (u.pathname === "/open" || u.pathname === "/uc") {
+      const id = u.searchParams.get("id");
+      return id && /^[\w-]{10,}$/.test(id) ? id : null;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function isDirectVideo(url: string): boolean {
   // Uploaded files live under /uploads/videos/ — same-origin, always playable as <video>.
   if (url.startsWith("/uploads/")) return true;
@@ -35,6 +57,7 @@ function isDirectVideo(url: string): boolean {
 
 export function VideoPlayer({ url }: { url: string }) {
   const youTubeId = parseYouTubeId(url);
+  const googleDriveId = parseGoogleDriveId(url);
 
   if (youTubeId) {
     return (
@@ -42,6 +65,23 @@ export function VideoPlayer({ url }: { url: string }) {
            style={{ aspectRatio: "16 / 9" }}>
         <iframe
           src={`https://www.youtube.com/embed/${youTubeId}`}
+          title="Video demonstration"
+          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+          className="absolute inset-0 h-full w-full"
+        />
+      </div>
+    );
+  }
+
+  if (googleDriveId) {
+    return (
+      <div
+        className="relative w-full overflow-hidden rounded-md border border-slate-200 bg-black"
+        style={{ aspectRatio: "16 / 9" }}
+      >
+        <iframe
+          src={`https://drive.google.com/file/d/${googleDriveId}/preview`}
           title="Video demonstration"
           allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
           allowFullScreen

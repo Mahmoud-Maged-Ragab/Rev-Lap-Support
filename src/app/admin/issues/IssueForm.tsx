@@ -38,9 +38,9 @@ export function IssueForm({
   );
   const [images, setImages] = useState<string[]>(initial?.images ?? []);
   const [videoUrl, setVideoUrl] = useState(initial?.videoUrl ?? "");
+  const [newLink, setNewLink] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
-  const [uploading, setUploading] = useState(false);
 
   const isEdit = Boolean(initial?.id);
 
@@ -53,55 +53,26 @@ export function IssueForm({
     });
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const input = e.target;
-    const files = Array.from(input.files ?? []);
-    if (files.length === 0) return;
-
-    setUploading(true);
-    setError(null);
-
-    const uploadedUrls: string[] = [];
+  function addLink() {
+    const trimmed = newLink.trim();
+    if (!trimmed) return;
     try {
-      for (const file of files) {
-        const formData = new FormData();
-        formData.append("file", file);
-
-        const res = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok || typeof data.url !== "string") {
-          throw new Error(data.error ?? `Upload failed for ${file.name}`);
-        }
-        uploadedUrls.push(data.url);
-      }
-      setImages((prev) => [...prev, ...uploadedUrls]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      input.value = "";
-    }
-  }
-
-  function isPdfUrl(url: string) {
-    try {
-      const clean = new URL(url).pathname;
-      return clean.toLowerCase().endsWith(".pdf");
+      new URL(trimmed);
     } catch {
-      return false;
+      setError("Please enter a valid URL.");
+      return;
     }
+    if (images.includes(trimmed)) {
+      setError("This link is already added.");
+      return;
+    }
+    setImages((prev) => [...prev, trimmed]);
+    setNewLink("");
+    setError(null);
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (uploading) {
-      setError("Please wait for uploads to finish before saving.");
-      return;
-    }
     if (selectedTagIds.size === 0) {
       setError("Please select at least one tag.");
       return;
@@ -253,59 +224,52 @@ export function IssueForm({
         </p>
       </div>
 
-      <label className="label">Images / PDFs</label>
+      <label className="label">PDF links</label>
 
-      <div className="flex flex-col gap-3">
-        <input
-          id="images"
-          type="file"
-          accept="image/*,.pdf"
-          multiple
-          className="hidden"
-          onChange={handleFileChange}
-          disabled={uploading}
-        />
-
-        <button
-          type="button"
-          className="btn btn-outline w-fit"
-          disabled={uploading}
-          onClick={() => document.getElementById("images")?.click()}
-        >
-          {uploading ? "Uploading…" : "📷 Choose files"}
-        </button>
+      <div className="space-y-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <input
+            type="url"
+            className="input flex-1"
+            value={newLink}
+            onChange={(e) => setNewLink(e.target.value)}
+            placeholder="https://drive.google.com/file/d/..."
+          />
+          <button
+            type="button"
+            className="btn btn-outline w-fit"
+            onClick={addLink}
+          >
+            Add link
+          </button>
+        </div>
+        <p className="text-xs text-slate-500">
+          Enter Google Drive PDF share links or direct PDF URLs. Click Add to save each link.
+        </p>
 
         {images.length > 0 && (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-col gap-2">
             {images.map((url, idx) => (
-              <div key={`${url}-${idx}`} className="relative">
-                {isPdfUrl(url) ? (
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex h-20 w-20 flex-col items-center justify-center rounded-lg border bg-slate-50 text-[10px] font-medium text-blue-600 hover:bg-slate-100"
-                  >
-                    <span className="text-2xl leading-none">📄</span>
-                    <span className="mt-1">PDF</span>
-                  </a>
-                ) : (
-                  <img
-                    src={url}
-                    alt={`Attachment ${idx + 1}`}
-                    className="h-20 w-20 rounded-lg border object-cover"
-                  />
-                )}
-
+              <div
+                key={`${url}-${idx}`}
+                className="flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-sm"
+              >
+                <a
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="truncate text-blue-600 hover:underline"
+                >
+                  {url}
+                </a>
                 <button
                   type="button"
-                  className="absolute -top-2 -right-2 h-5 w-5 rounded-full bg-red-500 text-xs text-white"
+                  className="text-sm text-red-700 hover:underline"
                   onClick={() =>
                     setImages((prev) => prev.filter((_, i) => i !== idx))
                   }
-                  aria-label="Remove attachment"
                 >
-                  ×
+                  Remove
                 </button>
               </div>
             ))}
@@ -325,12 +289,12 @@ export function IssueForm({
         <button
           type="submit"
           className="btn btn-primary"
-          disabled={saving || uploading}
+          disabled={saving}
         >
           {saving ? "Saving…" : isEdit ? "Save changes" : "Create issue"}
         </button>
         <button type="button" onClick={() => router.back()} className="btn">
-          Cancelsdad
+          Cancel
         </button>
       </div>
     </form>

@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { IconSearch } from "@tabler/icons-react";
+//import { IconSearch } from "@tabler/icons-react";
 
 export function SearchBar({ size = "lg" }: { size?: "lg" | "sm" }) {
   const router = useRouter();
@@ -26,10 +26,10 @@ export function SearchBar({ size = "lg" }: { size?: "lg" | "sm" }) {
     <form onSubmit={submit} role="search" className="w-full">
       <div className="relative">
         <div className="relative w-full">
-          <IconSearch
+          {/* <IconSearch
             stroke={2}
             className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-          />
+          /> */}
 
           <input
             value={q}

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import Logo from "../lib/Revenue Lab 360 Logo_Logo White.png";
 import Image from "next/image";
+import { readSession } from "@/lib/auth";
 
 export const metadata: Metadata = {
   title: "Revenue Lab 360 Support",
@@ -10,11 +11,14 @@ export const metadata: Metadata = {
     "Searchable internal documentation for issues, fixes, and solutions.",
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const session = await readSession();
+  const showAdminLink = session?.role === "ADMIN";
+
   return (
     <html lang="en">
       <body className="min-h-screen bg-white text-ink-900">
@@ -31,6 +35,14 @@ export default function RootLayout({
               <Link href="/" className="hover:text-ink-900">
                 Home
               </Link>
+              {showAdminLink ? (
+                <Link
+                  href="/admin/"
+                  className="flex items-center gap-4 text-sm text-slate-600"
+                >
+                  Admin Panel
+                </Link>
+              ) : null}
             </nav>
           </div>
         </header>
