@@ -55,10 +55,11 @@ export default async function AdminIssuesPage({
       </form>
 
       <div className="overflow-hidden rounded-md border border-slate-200">
-        <table className="table w-full text-sm">
+        <table className="table w-220 text-sm">
           <thead className="bg-slate-50">
             <tr>
               <th>Title</th>
+              <th className="w-36">Creator</th>
               <th className="w-40">Category</th>
               <th className="w-24">Views</th>
               <th className="w-32">Updated</th>

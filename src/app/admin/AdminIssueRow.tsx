@@ -33,6 +33,9 @@ export function AdminIssueRow({ issue }: { issue: IssueListItem }) {
         </Link>
         <div className="text-xs text-slate-500">/{issue.slug}</div>
       </td>
+      <td className="text-slate-600">
+        {issue.creator?.email ?? <span className="text-slate-400">—</span>}
+      </td>
       <td>{issue.category?.name ?? <span className="text-slate-400">—</span>}</td>
       <td>{issue.views.toLocaleString()}</td>
       <td className="text-slate-600">

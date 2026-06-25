@@ -20,6 +20,7 @@ export type IssueListItem = {
   updatedAt: Date;
   category: { id: string; name: string } | null;
   tags: { id: string; name: string }[];
+  creator: { email: string; role: "ADMIN" | "SUPPORT" } | null;
 };
 
 export type IssueListResult = {
@@ -51,10 +52,11 @@ type IssueRow = {
   updatedAt: string;
   category: { id: string; name: string } | null;
   tags: { tag: { id: string; name: string } | null }[];
+  creator?: { email: string; role: "ADMIN" | "SUPPORT" } | null;
 };
 
 const ISSUE_LIST_SELECT =
-  "id,title,slug,description,views,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name))";
+  "id,title,slug,description,views,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name)),creator:admins(email,role)";
 
 const ISSUE_FULL_SELECT =
   "id,title,slug,description,errorMessage,solution,images,videoUrl,views,categoryId,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name))";
@@ -188,6 +190,7 @@ function mapIssueListItem(r: IssueRow): IssueListItem {
       .map((t) => t.tag)
       .filter((t): t is { id: string; name: string } => !!t)
       .map((t) => ({ id: t.id, name: t.name })),
+    creator: r.creator ? { email: r.creator.email, role: r.creator.role } : null,
   };
 }
 
@@ -279,7 +282,7 @@ async function resolveTagIds(input: IssueInput): Promise<string[]> {
   return out;
 }
 
-export async function createIssue(input: IssueInput) {
+export async function createIssue(input: IssueInput, adminId?: string) {
   const tagIds = await resolveTagIds(input);
 
   const slug = await uniqueSlug(input.title, async (s) => {
@@ -305,6 +308,7 @@ export async function createIssue(input: IssueInput) {
       videoUrl: input.videoUrl ?? null,
       views: 0,
       categoryId: input.categoryId || null,
+      admin_id: adminId ?? null,
       createdAt: now,
       updatedAt: now,
     },

@@ -37,6 +37,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const issue = await createIssue(parsed.data);
+  const issue = await createIssue(parsed.data, session.sub);
   return NextResponse.json({ id: issue.id, slug: issue.slug }, { status: 201 });
 }

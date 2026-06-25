@@ -124,7 +124,7 @@ export function VideoField({
           >
             Use link
           </button>
-          <button
+          {/* <button
             type="button"
             onClick={() => setMode("upload")}
             className={
@@ -135,7 +135,7 @@ export function VideoField({
             }
           >
             Upload file
-          </button>
+          </button> */}
         </div>
       </div>
 
