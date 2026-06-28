@@ -20,7 +20,7 @@ export type IssueListItem = {
   updatedAt: Date;
   category: { id: string; name: string } | null;
   tags: { id: string; name: string }[];
-  creator: { email: string; role: "ADMIN" | "SUPPORT" } | null;
+  creator: { email: string; role: "ADMIN" | "Support" } | null;
 };
 
 export type IssueListResult = {
@@ -52,7 +52,7 @@ type IssueRow = {
   updatedAt: string;
   category: { id: string; name: string } | null;
   tags: { tag: { id: string; name: string } | null }[];
-  creator?: { email: string; role: "ADMIN" | "SUPPORT" } | null;
+  creator?: { email: string; role: "ADMIN" | "Support" } | null;
 };
 
 const ISSUE_LIST_SELECT =

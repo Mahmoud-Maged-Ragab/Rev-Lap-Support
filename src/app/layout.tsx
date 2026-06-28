@@ -18,6 +18,7 @@ export default async function RootLayout({
 }) {
   const session = await readSession();
   const showAdminLink = session?.role === "ADMIN";
+  const showSupportLink = session?.role === "SUPPORT";
 
   return (
     <html lang="en">
@@ -37,10 +38,18 @@ export default async function RootLayout({
               </Link>
               {showAdminLink ? (
                 <Link
-                  href="/admin/"
+                  href="/admin/accounts"
                   className="flex items-center gap-4 text-sm text-slate-600"
                 >
                   Admin Panel
+                </Link>
+              ) : null}
+              {showSupportLink ? (
+                <Link
+                  href="/admin/content"
+                  className="flex items-center gap-4 text-sm text-slate-600"
+                >
+                  Support Panel
                 </Link>
               ) : null}
             </nav>

@@ -8,7 +8,7 @@ import { generateId } from "@/lib/issues";
 type AdminRow = {
   id: string;
   email: string;
-  role: "ADMIN" | "SUPPORT";
+  role: "ADMIN" | "Support";
   createdAt: string;
   updatedAt: string;
 };

@@ -39,7 +39,7 @@ export type IssueInput = z.infer<typeof IssueInputSchema>;
 export const AdminInputSchema = z.object({
   email: z.string().trim().toLowerCase().email().max(200),
   password: z.string().min(8).max(200),
-  role: z.enum(["ADMIN", "SUPPORT"]).optional().default("SUPPORT"),
+  role: z.enum(["ADMIN", "Support"]).optional().default("Support"),
 });
 
 export const CategoryInputSchema = z.object({

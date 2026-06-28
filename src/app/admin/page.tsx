@@ -1,10 +1,25 @@
 import Link from "next/link";
 import { listIssues } from "@/lib/issues";
+import { selectAll } from "@/lib/supabase";
 import { AdminIssueRow } from "./AdminIssueRow";
 
 export const dynamic = "force-dynamic";
 
 type SP = { q?: string; sort?: "newest" | "oldest" | "views"; page?: string };
+
+type AccountActivityRow = {
+  id: string;
+  email: string;
+  role: "ADMIN" | "Support";
+};
+
+type IssueActivityRow = {
+  id: string;
+  title: string;
+  admin_id: string | null;
+  category: { id: string; name: string } | null;
+  tags: { tag: { id: string; name: string } | null }[];
+};
 
 export default async function AdminIssuesPage({
   searchParams,
@@ -13,13 +28,51 @@ export default async function AdminIssuesPage({
 }) {
   const page = Number(searchParams.page ?? "1") || 1;
   const pageSize = 25;
-  const { items, total } = await listIssues({
-    q: searchParams.q,
-    sort: searchParams.sort ?? "newest",
-    page,
-    pageSize,
-  });
+  const [{ items, total }, accounts, issues] = await Promise.all([
+    listIssues({
+      q: searchParams.q,
+      sort: searchParams.sort ?? "newest",
+      page,
+      pageSize,
+    }),
+    selectAll<AccountActivityRow>("admins", {
+      select: "id,email,role",
+      order: "email.asc",
+    }),
+    selectAll<IssueActivityRow>("issues", {
+      select: "id,title,admin_id,category:categories(id,name),tags:issue_tags(tag:tags(id,name))",
+      order: "createdAt.desc",
+    }),
+  ]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  const accountActivity = accounts.map((account) => {
+    const accountIssues = issues.filter((issue) => issue.admin_id === account.id);
+    const tags = Array.from(
+      new Set(
+        accountIssues.flatMap((issue) =>
+          (issue.tags ?? [])
+            .map((t) => t.tag)
+            .filter((t): t is { id: string; name: string } => !!t)
+            .map((t) => t.name),
+        ),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+    const categories = Array.from(
+      new Set(
+        accountIssues
+          .map((issue) => issue.category?.name)
+          .filter((name): name is string => !!name),
+      ),
+    ).sort((a, b) => a.localeCompare(b));
+
+    return {
+      ...account,
+      issues: accountIssues.map((issue) => issue.title),
+      tags,
+      categories,
+    };
+  });
 
   return (
     <div className="space-y-5">
@@ -53,6 +106,34 @@ export default async function AdminIssuesPage({
         </select>
         <button className="btn">Apply</button>
       </form>
+
+      <div className="rounded-md border border-slate-200 bg-slate-50/60 p-4">
+        <h2 className="text-sm font-semibold">Account activity</h2>
+        <div className="mt-3 space-y-3">
+          {accountActivity.map((account) => (
+            <div key={account.id} className="rounded border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="font-medium text-ink-900">{account.email}</div>
+                <span className="chip">{account.role === "ADMIN" ? "Admin" : "Support"}</span>
+              </div>
+              <div className="mt-2 space-y-1 text-sm text-slate-600">
+                <div>
+                  <span className="font-medium text-slate-700">Issues:</span>{" "}
+                  {account.issues.length > 0 ? account.issues.join(", ") : "None"}
+                </div>
+                <div>
+                  <span className="font-medium text-slate-700">Tags:</span>{" "}
+                  {account.tags.length > 0 ? account.tags.join(", ") : "None"}
+                </div>
+                <div>
+                  <span className="font-medium text-slate-700">Categories:</span>{" "}
+                  {account.categories.length > 0 ? account.categories.join(", ") : "None"}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
 
       <div className="overflow-hidden rounded-md border border-slate-200">
         <table className="table w-220 text-sm">

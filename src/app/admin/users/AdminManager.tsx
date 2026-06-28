@@ -1,8 +1,9 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 
-type Role = "ADMIN" | "SUPPORT";
+type Role = "ADMIN" | "Support";
 type Row = { id: string; email: string; role: Role; createdAt: string };
 
 function fmt(iso: string) {
@@ -20,11 +21,13 @@ export function AdminManager({
   initial: Row[];
   currentAdminId: string | null;
 }) {
+  const router = useRouter();
   const [rows, setRows] = useState<Row[]>(initial);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [role, setRole] = useState<Role>("SUPPORT");
+  const [role, setRole] = useState<Role>("Support");
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
@@ -47,12 +50,31 @@ export function AdminManager({
       ]);
       setEmail("");
       setPassword("");
-      setRole("SUPPORT");
+      setRole("Support");
       setNotice(`Admin "${data.email}" created.`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to create admin");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function remove(id: string, email: string) {
+    if (!confirm(`Delete account "${email}"?`)) return;
+    setDeletingId(id);
+    setError(null);
+    setNotice(null);
+    try {
+      const res = await fetch(`/api/admins/${id}`, { method: "DELETE" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to delete account");
+      setRows((prev) => prev.filter((row) => row.id !== id));
+      setNotice(`Account "${email}" deleted.`);
+      router.refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to delete account");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -110,7 +132,7 @@ export function AdminManager({
               value={role}
               onChange={(e) => setRole(e.target.value as Role)}
             >
-              <option value="SUPPORT">Support member</option>
+              <option value="Support">Support member</option>
               <option value="ADMIN">Admin</option>
             </select>
           </div>
@@ -140,6 +162,7 @@ export function AdminManager({
               <th>Email</th>
               <th className="w-32">Role</th>
               <th className="w-40">Created</th>
+              <th className="w-28 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -166,6 +189,20 @@ export function AdminManager({
                     </span>
                   </td>
                   <td>{fmt(a.createdAt)}</td>
+                  <td className="text-right">
+                    {isSelf ? (
+                      <span className="text-xs text-slate-400">Current</span>
+                    ) : (
+                      <button
+                        type="button"
+                        className="btn btn-danger !h-7 !px-2 !text-xs"
+                        onClick={() => remove(a.id, a.email)}
+                        disabled={deletingId === a.id}
+                      >
+                        {deletingId === a.id ? "…" : "Delete"}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               );
             })}

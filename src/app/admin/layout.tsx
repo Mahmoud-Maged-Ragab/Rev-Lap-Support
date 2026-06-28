@@ -25,11 +25,15 @@ export default async function AdminLayout({
         <div className="px-2 pb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           {isAdmin ? "Admin" : "Support"}
         </div>
-        <NavLink href="/admin">Issues</NavLink>
-        {/* <NavLink href="/admin/issues/new">New issue</NavLink> */}
-        <NavLink href="/admin/categories">Categories</NavLink>
-        <NavLink href="/admin/tags">Tags</NavLink>
-        {isAdmin && <NavLink href="/admin/users">Admin users</NavLink>}
+        {isAdmin ? (
+          <NavLink href="/admin/accounts">Account management</NavLink>
+        ) : (
+          <>
+            <NavLink href="/admin/content">Issues</NavLink>
+            <NavLink href="/admin/categories">Categories</NavLink>
+            <NavLink href="/admin/tags">Tags</NavLink>
+          </>
+        )}
         <div className="mt-4 border-t border-slate-200 pt-3">
           <div className="px-2 text-xs text-slate-500">Signed in as</div>
           <div className="px-2 text-sm text-ink-900">{session!.email}</div>

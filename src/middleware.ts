@@ -5,37 +5,68 @@ import { jwtVerify } from "jose";
 const ALG = "HS256";
 const CLOCK_TOLERANCE_SECONDS = 30;
 
-async function isValid(token: string | undefined): Promise<boolean> {
-  if (!token) return false;
+type SessionLike = {
+  sub: string;
+  email: string;
+  role?: string;
+};
+
+async function getSession(token: string | undefined): Promise<SessionLike | null> {
+  if (!token) return null;
   const secret = process.env.AUTH_SECRET;
-  if (!secret) return false;
+  if (!secret) return null;
   try {
-    await jwtVerify(token, new TextEncoder().encode(secret), {
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(secret), {
       algorithms: [ALG],
       clockTolerance: CLOCK_TOLERANCE_SECONDS,
     });
-    return true;
+    return payload as SessionLike;
   } catch {
-    return false;
+    return null;
   }
+}
+
+function redirectToRoleHome(req: NextRequest, role: string | undefined) {
+  const url = req.nextUrl.clone();
+  url.pathname = role === "ADMIN" ? "/admin/accounts" : "/admin/content";
+  url.search = "";
+  return NextResponse.redirect(url);
 }
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   const token = req.cookies.get("kb_session")?.value;
-  const valid = await isValid(token);
+  const session = await getSession(token);
+  const role = session?.role === "ADMIN" || session?.role === "SUPPORT" ? session.role : undefined;
 
-  // Protect /admin pages (except /admin/login)
   if (pathname.startsWith("/admin") && pathname !== "/admin/login") {
-    if (!valid) {
+    if (!session) {
       const url = req.nextUrl.clone();
       url.pathname = "/admin/login";
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
+
+    if (pathname === "/admin") {
+      return redirectToRoleHome(req, role);
+    }
+
+    const isAccountRoute = pathname === "/admin/accounts" || pathname.startsWith("/admin/accounts/");
+    const isContentRoute = pathname === "/admin/content" || pathname.startsWith("/admin/content/");
+
+    if (isAccountRoute && role !== "ADMIN") {
+      return redirectToRoleHome(req, role);
+    }
+
+    if (isContentRoute && role !== "SUPPORT") {
+      return redirectToRoleHome(req, role);
+    }
   }
 
-  // Block mutating admin API routes if no session
+  if (pathname === "/admin/login" && session) {
+    return redirectToRoleHome(req, role);
+  }
+
   if (pathname.startsWith("/api/")) {
     const method = req.method.toUpperCase();
     const isMutation = method === "POST" || method === "PUT" || method === "PATCH" || method === "DELETE";
@@ -44,7 +75,7 @@ export async function middleware(req: NextRequest) {
     const isPublicCatTagGet =
       (pathname.startsWith("/api/categories") || pathname.startsWith("/api/tags")) && method === "GET";
 
-    if (!valid && !isAuthRoute && !isPublicIssueGet && !isPublicCatTagGet) {
+    if (!session && !isAuthRoute && !isPublicIssueGet && !isPublicCatTagGet) {
       if (isMutation || pathname.startsWith("/api/admin")) {
         return new NextResponse(JSON.stringify({ error: "Unauthorized" }), {
           status: 401,
@@ -52,14 +83,6 @@ export async function middleware(req: NextRequest) {
         });
       }
     }
-  }
-
-  // Redirect logged-in admins away from the login page
-  if (pathname === "/admin/login" && valid) {
-    const url = req.nextUrl.clone();
-    url.pathname = "/admin";
-    url.search = "";
-    return NextResponse.redirect(url);
   }
 
   return NextResponse.next();

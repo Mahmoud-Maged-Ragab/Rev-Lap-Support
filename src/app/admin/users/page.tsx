@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 type AdminRow = {
   id: string;
   email: string;
-  role: "ADMIN" | "SUPPORT";
+  role: "ADMIN" | "Support";
   createdAt: string;
 };
 
