@@ -7,8 +7,6 @@ Internal support / knowledge base for documenting issues, error messages, and fi
 - **Next.js 14** (App Router, server components, route handlers)
 - **TypeScript** strict mode
 - **Tailwind CSS** — neutral, professional UI (no purple gradients, no glassmorphism)
-- **Prisma** ORM
-- **SQLite** by default; swap to Postgres/MySQL by changing the provider in `prisma/schema.prisma` and `DATABASE_URL`
 - **JWT session auth** via `jose` (HTTP-only cookie) + `bcryptjs` for password hashing
 - **Zod** for runtime input validation
 - **Middleware** to gate `/admin/*` pages and mutating `/api/*` routes
@@ -16,9 +14,6 @@ Internal support / knowledge base for documenting issues, error messages, and fi
 ## Project layout
 
 ```
-prisma/
-  schema.prisma         # DB models: Admin, Category, Issue, Tag, IssueTag
-  seed.ts               # seeds the admin and a few sample issues
 src/
   middleware.ts         # auth gate for /admin and write APIs
   lib/
@@ -66,32 +61,9 @@ This also runs `prisma generate` via the `postinstall` script.
 
 ### 2. Create the PostgreSQL database
 
-You need a running Postgres server. Pick one:
+You need a running Postgres server:
 
-**Option A — local Postgres**
-```bash
-# Mac/Homebrew
-brew install postgresql@16 && brew services start postgresql@16
-createdb support_kb
-```
-```bash
-# Linux (debian/ubuntu)
-sudo apt-get install -y postgresql
-sudo -u postgres createdb support_kb
-```
-```powershell
-# Windows (after installing Postgres from postgresql.org)
-"C:\Program Files\PostgreSQL\16\bin\createdb.exe" -U postgres support_kb
-```
-
-**Option B — Docker**
-```bash
-docker run --name support-kb-pg -e POSTGRES_PASSWORD=postgres \
-  -p 5432:5432 -d postgres:16
-docker exec -it support-kb-pg createdb -U postgres support_kb
-```
-
-**Option C — managed** (Neon, Supabase, RDS, etc.) — copy the connection string they give you.
+ (Neon, Supabase, RDS, etc.) — copy the connection string they give you.
 
 ### 3. Configure environment
 
