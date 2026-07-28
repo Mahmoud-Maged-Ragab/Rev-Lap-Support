@@ -15,6 +15,7 @@
  */
 
 import type { ReactNode } from "react";
+import type { Role } from "@/lib/permissions";
 
 // ---------------------------------------------------------------------------
 // Icons — small inline SVGs (24×24, stroke-based) so the guide gets iconography
@@ -399,7 +400,10 @@ export function RuleList({ items }: { items: ReactNode[] }) {
   return (
     <ul className="space-y-2">
       {items.map((item, i) => (
-        <li key={i} className="flex gap-2.5 text-sm leading-relaxed text-slate-700">
+        <li
+          key={i}
+          className="flex gap-2.5 text-sm leading-relaxed text-slate-700"
+        >
           <Icons.check className="mt-1 h-3.5 w-3.5 shrink-0 text-emerald-600" />
           <span>{item}</span>
         </li>
@@ -517,7 +521,10 @@ export type PermissionRow = {
 };
 
 // Helper to compare role for highlighting (handles both Role type and string)
-function isHighlighted(highlight: Role | string | undefined, role: Role): boolean {
+function isHighlighted(
+  highlight: Role | string | undefined,
+  role: Role,
+): boolean {
   if (!highlight) return false;
   return highlight === role || highlight === role.toLowerCase();
 }

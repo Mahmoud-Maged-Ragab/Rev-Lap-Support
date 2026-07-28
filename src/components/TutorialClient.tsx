@@ -37,7 +37,9 @@ type TutorialAuth = {
 export default function TutorialClient({ auth }: { auth: TutorialAuth }) {
   const router = useRouter();
   const t = useTranslations("tutorial");
-  const [selectedRole, setSelectedRole] = useState<string | null>(null);
+  const [selectedRole, setSelectedRole] = useState<string | undefined>(
+    undefined,
+  );
   const [activeSection, setActiveSection] = useState<string>("quick-start");
 
   // Scroll to section when activeSection changes
