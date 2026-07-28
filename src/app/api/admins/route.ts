@@ -10,6 +10,7 @@ import {
 import { AdminInputSchema } from "@/lib/validation";
 import { insertRow, selectAll, selectOne, SupabaseError } from "@/lib/supabase";
 import { generateId } from "@/lib/issues";
+import { auditLog } from "@/lib/audit";
 
 type AdminRow = {
   id: string;
@@ -22,7 +23,8 @@ type AdminRow = {
 
 export async function GET() {
   const session = await readSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!canManageUsers(session.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -35,7 +37,8 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const session = await readSession();
-  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!session)
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!canManageUsers(session.role))
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
@@ -50,7 +53,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json(
       { error: "Validation failed", details: parsed.error.flatten() },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
@@ -60,8 +63,10 @@ export async function POST(req: Request) {
   const desiredRole = normalizeRole(parsed.data.role ?? "SUPPORT");
   if (!canCreateRole(session.role, desiredRole)) {
     return NextResponse.json(
-      { error: `You are not allowed to create a ${roleLabel(desiredRole)} account` },
-      { status: 403 }
+      {
+        error: `You are not allowed to create a ${roleLabel(desiredRole)} account`,
+      },
+      { status: 403 },
     );
   }
 
@@ -73,7 +78,10 @@ export async function POST(req: Request) {
     filters: { email: `eq.${email}` },
   });
   if (existing) {
-    return NextResponse.json({ error: "An admin with that email already exists" }, { status: 409 });
+    return NextResponse.json(
+      { error: "An admin with that email already exists" },
+      { status: 409 },
+    );
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
@@ -90,13 +98,27 @@ export async function POST(req: Request) {
         createdAt: now,
         updatedAt: now,
       },
-      { select: "id,email,role,disabled,createdAt,updatedAt" }
+      { select: "id,email,role,disabled,createdAt,updatedAt" },
     );
 
-    return NextResponse.json(rows[0], { status: 201 });
+    const created = rows[0];
+    if (created) {
+      await auditLog({
+        entityType: "user",
+        entityId: created.id,
+        action: "CREATE_USER",
+        actor: session,
+        newData: created as unknown as Record<string, unknown>,
+        request: req,
+      });
+    }
+    return NextResponse.json(created, { status: 201 });
   } catch (err) {
     if (err instanceof SupabaseError && err.status === 409) {
-      return NextResponse.json({ error: "An admin with that email already exists" }, { status: 409 });
+      return NextResponse.json(
+        { error: "An admin with that email already exists" },
+        { status: 409 },
+      );
     }
     throw err;
   }

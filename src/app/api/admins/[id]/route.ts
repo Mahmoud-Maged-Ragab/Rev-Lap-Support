@@ -9,9 +9,11 @@ import {
   type Role,
 } from "@/lib/permissions";
 import { deleteRows, selectOne, selectRows, updateRows } from "@/lib/supabase";
+import { auditLog, type AuditAction } from "@/lib/audit";
 
 type TargetRow = {
   id: string;
+  email?: string;
   role: string;
   disabled?: boolean | null;
 };
@@ -29,12 +31,12 @@ async function countByRole(role: Role, opts: { activeOnly?: boolean } = {}): Pro
   return count ?? 0;
 }
 
-export async function DELETE(_req: Request, { params }: { params: { id: string } }) {
+export async function DELETE(req: Request, { params }: { params: { id: string } }) {
   const session = await readSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const target = await selectOne<TargetRow>("admins", {
-    select: "id,role",
+    select: "id,email,role,disabled",
     filters: { id: `eq.${params.id}` },
   });
   if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -61,6 +63,14 @@ export async function DELETE(_req: Request, { params }: { params: { id: string }
   }
 
   await deleteRows("admins", { id: `eq.${params.id}` }, { returning: false });
+  await auditLog({
+    entityType: "user",
+    entityId: target.id,
+    action: "DELETE_USER",
+    actor: session,
+    oldData: target as unknown as Record<string, unknown>,
+    request: req,
+  });
   return NextResponse.json({ ok: true });
 }
 
@@ -82,7 +92,7 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
   }
 
   const target = await selectOne<TargetRow>("admins", {
-    select: "id,role,disabled",
+    select: "id,email,role,disabled",
     filters: { id: `eq.${params.id}` },
   });
   if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -141,5 +151,22 @@ export async function PATCH(req: Request, { params }: { params: { id: string } }
     patch,
     { select: "id,email,role,disabled,updatedAt" }
   );
+
+  // Most specific action wins: role change > disable/enable > generic update.
+  const action: AuditAction = wantsRoleChange
+    ? "ROLE_CHANGED"
+    : wantsDisableChange
+      ? (body.disabled ? "DISABLE_USER" : "ENABLE_USER")
+      : "UPDATE_USER";
+  await auditLog({
+    entityType: "user",
+    entityId: target.id,
+    action,
+    actor: session,
+    oldData: target as unknown as Record<string, unknown>,
+    newData: (rows[0] ?? patch) as unknown as Record<string, unknown>,
+    request: req,
+  });
+
   return NextResponse.json(rows[0] ?? { ok: true });
 }

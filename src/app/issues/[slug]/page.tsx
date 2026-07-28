@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { VideoPlayer } from "@/components/VideoPlayer";
+import { SaveIssueButton } from "@/components/SaveIssueButton";
 
 export const dynamic = "force-dynamic";
 
@@ -163,6 +164,9 @@ export default async function IssuePage({
       </div>
 
       <aside className="space-y-5 text-sm">
+        <div className="rounded-md border border-slate-200 p-4">
+          <SaveIssueButton issueId={issue.id} />
+        </div>
         <div className="rounded-md border border-slate-200 p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {t("category")}

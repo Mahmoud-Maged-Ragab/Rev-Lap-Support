@@ -56,6 +56,9 @@ export default async function RootLayout({
                 <Link href="/" className="hover:text-ink-900">
                   {t("home")}
                 </Link>
+                <Link href="/saved-issues" className="hover:text-ink-900">
+                  {t("savedIssues")}
+                </Link>
                 {showOwnerLink ? (
                   <Link href="/owner" className="hover:text-ink-900">
                     {t("ownerPanel")}

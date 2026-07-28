@@ -3,6 +3,7 @@ import { readSession } from "@/lib/auth";
 import { TagInputSchema } from "@/lib/validation";
 import { insertRow, selectAll, SupabaseError } from "@/lib/supabase";
 import { generateId } from "@/lib/issues";
+import { auditLog } from "@/lib/audit";
 
 export async function GET() {
   const tags = await selectAll<{ id: string; name: string }>("tags", {
@@ -35,7 +36,18 @@ export async function POST(req: Request) {
       { id: generateId(), name },
       { select: "id,name" },
     );
-    return NextResponse.json(rows[0], { status: 201 });
+    const created = rows[0];
+    if (created) {
+      await auditLog({
+        entityType: "tag",
+        entityId: created.id,
+        action: "CREATE_TAG",
+        actor: session,
+        newData: created,
+        request: req,
+      });
+    }
+    return NextResponse.json(created, { status: 201 });
   } catch (err) {
     if (err instanceof SupabaseError && err.status === 409) {
       return NextResponse.json(
