@@ -47,7 +47,11 @@ export default async function AdminLayout({
           <NavLink href="/owner">{t("ownerDashboard")}</NavLink>
         )}
         {canManageUsers(role) && (
-          <NavLink href="/admin/accounts">{t("accountManagement")}</NavLink>
+          <>
+            <NavLink href="/admin/accounts">{t("accountManagement")}</NavLink>
+            <NavLink href="/admin/history">{t("issueHistory")}</NavLink>
+            <NavLink href="/admin/audit-logs">{t("auditLogs")}</NavLink>
+          </>
         )}
         {canManageContent(role) && (
           <>
@@ -56,6 +60,7 @@ export default async function AdminLayout({
             <NavLink href="/admin/tags">{t("tags")}</NavLink>
           </>
         )}
+        <NavLink href="/tutorial">{t("tutorial")}</NavLink>
         <div className="mt-4 border-t border-slate-200 pt-3">
           <div className="px-2 text-xs text-slate-500">{t("signedInAs")}</div>
           <div className="px-2 text-sm text-ink-900">{session!.email}</div>

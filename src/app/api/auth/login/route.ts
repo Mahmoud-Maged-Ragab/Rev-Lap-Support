@@ -4,6 +4,7 @@ import { LoginSchema } from "@/lib/validation";
 import { createSession } from "@/lib/auth";
 import { normalizeRole } from "@/lib/permissions";
 import { selectOne } from "@/lib/supabase";
+import { auditLog } from "@/lib/audit";
 
 type AdminRow = {
   id: string;
@@ -61,6 +62,13 @@ export async function POST(req: Request) {
     sub: admin.id,
     email: admin.email,
     role,
+  });
+  await auditLog({
+    entityType: "auth",
+    entityId: admin.id,
+    action: "LOGIN",
+    actor: { sub: admin.id, email: admin.email },
+    request: req,
   });
   return NextResponse.json({ ok: true, role });
 }

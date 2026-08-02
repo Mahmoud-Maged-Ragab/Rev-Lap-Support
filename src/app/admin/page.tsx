@@ -3,8 +3,12 @@ import { getTranslations } from "next-intl/server";
 import { listIssues } from "@/lib/issues";
 import { selectAll } from "@/lib/supabase";
 import { requireContentAccess } from "@/lib/guards";
-import { normalizeRole } from "@/lib/permissions";
+import { normalizeRole, canManageUsers } from "@/lib/permissions";
+import { getDashboardStats } from "@/lib/stats";
+import { getActivityStats, listRecentActivity } from "@/lib/history";
 import { AdminIssueRow } from "./AdminIssueRow";
+import { DashboardStats } from "@/components/DashboardStats";
+import { DashboardAnalytics } from "@/components/analytics/DashboardAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -36,9 +40,11 @@ export default async function AdminIssuesPage({
 }: {
   searchParams: SP;
 }) {
-  await requireContentAccess();
+  const session = await requireContentAccess();
+  const showAnalytics = canManageUsers(session.role);
   const t = await getTranslations("issuesTable");
   const tr = await getTranslations("roles");
+  const tActivity = await getTranslations("activity");
 
   const page = Number(searchParams.page ?? "1") || 1;
   const pageSize = 25;
@@ -59,6 +65,15 @@ export default async function AdminIssuesPage({
     }),
   ]);
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+  // User/role counts come from the accounts already fetched; the issue total
+  // is already known from the full issues fetch above — only categories and
+  // tags need count queries (run concurrently inside the helper).
+  const [stats, activity, recent] = await Promise.all([
+    getDashboardStats(accounts, { issues: issues.length }),
+    showAnalytics ? getActivityStats(accounts) : Promise.resolve(null),
+    showAnalytics ? listRecentActivity(8) : Promise.resolve([]),
+  ]);
 
   const accountActivity = accounts.map((account) => {
     const accountIssues = issues.filter((issue) => issue.admin_id === account.id);
@@ -101,6 +116,17 @@ export default async function AdminIssuesPage({
           {t("newIssue")}
         </Link>
       </div>
+
+      <DashboardStats data={stats} />
+
+      {showAnalytics && activity && (
+        <section className="space-y-3">
+          <h2 className="text-sm font-semibold text-ink-900">
+            {tActivity("sectionTitle")}
+          </h2>
+          <DashboardAnalytics stats={activity} recent={recent} />
+        </section>
+      )}
 
       <form className="flex gap-2" action="/admin" method="get">
         <input

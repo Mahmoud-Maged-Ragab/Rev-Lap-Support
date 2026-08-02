@@ -1,9 +1,14 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { requireOwner } from "@/lib/guards";
 import { normalizeRole, type Role } from "@/lib/permissions";
-import { selectAll, selectRows } from "@/lib/supabase";
+import { selectAll } from "@/lib/supabase";
+import { getDashboardStats } from "@/lib/stats";
+import { getActivityStats, listRecentActivity } from "@/lib/history";
 import { LogoutButton } from "@/app/admin/LogoutButton";
-import { OwnerUserManager } from "./OwnerUserManager";
+import { UserManager } from "@/components/UserManager";
+import { DashboardStats } from "@/components/DashboardStats";
+import { DashboardAnalytics } from "@/components/analytics/DashboardAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -15,22 +20,18 @@ type AdminRow = {
   createdAt: string;
 };
 
-async function tableCount(table: string): Promise<number> {
-  const { count } = await selectRows(table, { select: "id", limit: 1, count: "exact" });
-  return count ?? 0;
-}
-
 export default async function OwnerDashboardPage() {
   const session = await requireOwner();
+  const tActivity = await getTranslations("activity");
 
-  const [admins, issueCount, categoryCount, tagCount] = await Promise.all([
-    selectAll<AdminRow>("admins", {
-      select: "id,email,role,disabled,createdAt",
-      order: "createdAt.asc",
-    }),
-    tableCount("issues"),
-    tableCount("categories"),
-    tableCount("tags"),
+  const admins = await selectAll<AdminRow>("admins", {
+    select: "id,email,role,disabled,createdAt",
+    order: "createdAt.asc",
+  });
+  const [stats, activity, recent] = await Promise.all([
+    getDashboardStats(admins),
+    getActivityStats(admins),
+    listRecentActivity(8),
   ]);
 
   const users = admins.map((a) => ({
@@ -41,28 +42,13 @@ export default async function OwnerDashboardPage() {
     createdAt: new Date(a.createdAt).toISOString(),
   }));
 
-  const roleCounts = users.reduce(
-    (acc, u) => {
-      acc[u.role] += 1;
-      return acc;
-    },
-    { OWNER: 0, ADMIN: 0, SUPPORT: 0 } as Record<Role, number>,
-  );
-
-  const stats: { label: string; value: number }[] = [
-    { label: "Owners", value: roleCounts.OWNER },
-    { label: "Admins", value: roleCounts.ADMIN },
-    { label: "Support", value: roleCounts.SUPPORT },
-    { label: "Issues", value: issueCount },
-    { label: "Categories", value: categoryCount },
-    { label: "Tags", value: tagCount },
-  ];
-
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight">Owner dashboard</h1>
+          <h1 className="text-lg font-semibold tracking-tight">
+            Owner dashboard
+          </h1>
           <p className="text-sm text-slate-500">
             Full control over users, content, and system settings.
           </p>
@@ -77,31 +63,35 @@ export default async function OwnerDashboardPage() {
 
       {/* Statistics */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-ink-900">System statistics</h2>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {stats.map((s) => (
-            <div
-              key={s.label}
-              className="rounded-md border border-slate-200 bg-white p-4"
-            >
-              <div className="text-2xl font-semibold text-ink-900">{s.value}</div>
-              <div className="text-xs uppercase tracking-wide text-slate-500">
-                {s.label}
-              </div>
-            </div>
-          ))}
-        </div>
+        <h2 className="text-sm font-semibold text-ink-900">
+          System statistics
+        </h2>
+        <DashboardStats data={stats} />
+      </section>
+
+      {/* User activity analytics */}
+      <section className="space-y-3">
+        <h2 className="text-sm font-semibold text-ink-900">
+          {tActivity("sectionTitle")}
+        </h2>
+        <DashboardAnalytics stats={activity} recent={recent} />
       </section>
 
       {/* User management */}
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-ink-900">User management</h2>
-        <OwnerUserManager initial={users} currentAdminId={session.sub} />
+        <UserManager
+          initial={users}
+          currentAdminId={session.sub}
+          actorRole={normalizeRole(session.role)}
+        />
       </section>
 
       {/* Content management */}
       <section className="space-y-3">
-        <h2 className="text-sm font-semibold text-ink-900">Content management</h2>
+        <h2 className="text-sm font-semibold text-ink-900">
+          Content management
+        </h2>
         <div className="grid gap-4 md:grid-cols-3">
           <Link
             href="/admin/content/issues"
@@ -126,7 +116,9 @@ export default async function OwnerDashboardPage() {
             className="rounded-md border border-slate-200 bg-white p-4 hover:bg-slate-50"
           >
             <div className="font-medium text-ink-900">Tags</div>
-            <div className="mt-1 text-sm text-slate-500">Label issues with tags.</div>
+            <div className="mt-1 text-sm text-slate-500">
+              Label issues with tags.
+            </div>
           </Link>
         </div>
       </section>
