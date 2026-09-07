@@ -120,6 +120,7 @@ export function CustomVideoPlayer({ src }: { src: string }) {
       tabIndex={0}
       onKeyDown={onKeyDown}
       onMouseMove={armAutoHide}
+      onTouchStart={armAutoHide}
       onMouseLeave={() => {
         if (videoRef.current && !videoRef.current.paused) setControlsVisible(false);
       }}
@@ -130,6 +131,8 @@ export function CustomVideoPlayer({ src }: { src: string }) {
         ref={videoRef}
         src={src}
         preload="metadata"
+        playsInline
+        webkit-playsinline="true"
         onClick={togglePlay}
         onPlay={() => {
           setPlaying(true);
@@ -179,11 +182,13 @@ export function CustomVideoPlayer({ src }: { src: string }) {
 
       <div
         className={
-          "pointer-events-none absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-8 transition-opacity " +
-          (controlsVisible ? "opacity-100" : "opacity-0")
+          "absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/70 to-transparent px-3 pb-2 pt-8 transition-opacity " +
+          (controlsVisible
+            ? "pointer-events-auto opacity-100"
+            : "pointer-events-none opacity-0")
         }
       >
-        <div className="pointer-events-auto space-y-1.5">
+        <div className="space-y-1.5">
           <div className="relative h-1.5 w-full rounded bg-white/20">
             <div
               className="absolute inset-y-0 left-0 rounded bg-white/40"
@@ -232,7 +237,7 @@ export function CustomVideoPlayer({ src }: { src: string }) {
                 value={muted ? 0 : volume}
                 onChange={onVolume}
                 aria-label="Volume"
-                className="h-1 w-20 cursor-pointer accent-white"
+                className="hidden h-1 w-20 cursor-pointer accent-white sm:block"
               />
               <IconBtn onClick={toggleFullscreen} label="Fullscreen">
                 {fullscreen ? <FsExitIcon /> : <FsIcon />}
@@ -259,7 +264,7 @@ function IconBtn({
       type="button"
       onClick={onClick}
       aria-label={label}
-      className="rounded p-1.5 text-white/90 hover:bg-white/15 hover:text-white"
+      className="rounded p-2.5 text-white/90 hover:bg-white/15 hover:text-white sm:p-1.5"
     >
       {children}
     </button>

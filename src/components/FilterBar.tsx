@@ -24,13 +24,55 @@ export function FilterBar({
     router.push(`/?${next.toString()}`);
   }
 
-  const sort = params.get("sort") ?? "newest";
   const cat = params.get("category") ?? "";
   const tag = params.get("tag") ?? "";
 
   return (
-    <aside className="space-y-6">
-      <div>
+    <aside className="space-y-4 md:space-y-6">
+      {/* Mobile / narrow layout: compact selects instead of a tall list. */}
+      <div className="grid grid-cols-2 gap-2 md:hidden">
+        <div>
+          <label htmlFor="filter-category-mobile" className="sr-only">
+            {t("categories")}
+          </label>
+          <select
+            id="filter-category-mobile"
+            className="select"
+            value={cat}
+            onChange={(e) => setParam("category", e.target.value || null)}
+          >
+            <option value="">{t("allCategories")}</option>
+            {categories.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+                {typeof c._count === "number" ? ` (${c._count})` : ""}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div>
+          <label htmlFor="filter-tag-mobile" className="sr-only">
+            {t("tags")}
+          </label>
+          <select
+            id="filter-tag-mobile"
+            className="select"
+            value={tag}
+            onChange={(e) => setParam("tag", e.target.value || null)}
+          >
+            <option value="">{t("allTags")}</option>
+            {tags.map((tg) => (
+              <option key={tg.id} value={tg.id}>
+                {tg.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Desktop / wide layout: unchanged list + chip picker. */}
+      <div className="hidden md:block">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           {t("categories")}
         </div>
@@ -65,7 +107,7 @@ export function FilterBar({
         </ul>
       </div>
 
-      <div>
+      <div className="hidden md:block">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           {t("tags")}
         </div>

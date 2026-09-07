@@ -13,6 +13,7 @@ import {
 } from "@/lib/permissions";
 import { dir, type Locale } from "@/i18n/config";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { MobileNav } from "@/components/MobileNav";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -39,20 +40,38 @@ export default async function RootLayout({
   const showAdminLink = role ? canManageUsers(role) && !showOwnerLink : false;
   const showSupportLink = role === "SUPPORT";
 
+  const navLinks = [
+    { href: "/", label: t("home") },
+    { href: "/saved-issues", label: t("savedIssues") },
+    ...(showOwnerLink ? [{ href: "/owner", label: t("ownerPanel") }] : []),
+    ...(showAdminLink
+      ? [{ href: "/admin/accounts", label: t("adminPanel") }]
+      : []),
+    ...(showSupportLink
+      ? [{ href: "/admin/content", label: t("supportPanel") }]
+      : []),
+  ];
+
   return (
     <html lang={locale} dir={dir(locale)}>
       <body className="min-h-screen bg-white text-ink-900">
         <NextIntlClientProvider messages={messages}>
-          <header className="border-b border-slate-200 bg-white">
-            <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4">
+          <header className="relative border-b border-slate-200 bg-white">
+            <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
               <Link
                 href="/"
-                className="flex items-center gap-2 font-semibold tracking-tight"
+                className="flex min-w-0 items-center gap-2 font-semibold tracking-tight"
               >
-                <Image src={Logo} alt="Revenue Lab 360" width={40} height={40} />{" "}
-                <span>Revenue Lab 360 Support</span>
+                <Image
+                  src={Logo}
+                  alt="Revenue Lab 360"
+                  width={40}
+                  height={40}
+                  className="shrink-0"
+                />
+                <span className="truncate">Revenue Lab 360 Support</span>
               </Link>
-              <nav className="flex items-center gap-4 text-sm text-slate-600">
+              <nav className="hidden items-center gap-4 text-sm text-slate-600 md:flex">
                 <Link href="/" className="hover:text-ink-900">
                   {t("home")}
                 </Link>
@@ -76,9 +95,10 @@ export default async function RootLayout({
                 ) : null}
                 <LanguageSwitcher />
               </nav>
+              <MobileNav links={navLinks} menuLabel={t("menu")} />
             </div>
           </header>
-          <main className="mx-auto max-w-6xl px-4 py-8">{children}</main>
+          <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">{children}</main>
           <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
             {tf("text", { year: new Date().getFullYear() })}
           </footer>

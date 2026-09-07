@@ -66,7 +66,7 @@ export default async function Home({
 
   return (
     <div className="space-y-8">
-      <section className="rounded-lg border border-slate-200 bg-slate-50 px-6 py-8">
+      <section className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-6 sm:px-6 sm:py-8">
         <h1 className="text-xl font-semibold tracking-tight">{t("title")}</h1>
         <p className="mt-1 text-sm text-slate-600">{t("subtitle")}</p>
         <div className="mt-4 max-w-2xl">
@@ -74,7 +74,7 @@ export default async function Home({
         </div>
       </section>
 
-      <section className="grid grid-cols-1 gap-8 md:grid-cols-[220px_1fr]">
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-[220px_1fr] md:gap-8">
         <FilterBar categories={categories} tags={tags} />
 
         <div className="space-y-3">

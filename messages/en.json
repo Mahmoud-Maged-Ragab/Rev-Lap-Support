@@ -8,7 +8,8 @@
     "savedIssues": "Saved Issues",
     "ownerPanel": "Owner Panel",
     "adminPanel": "Admin Panel",
-    "supportPanel": "Support Panel"
+    "supportPanel": "Support Panel",
+    "menu": "Menu"
   },
   "footer": {
     "text": "Internal use. © {year} Revenue Lab 360. All rights reserved."
@@ -41,6 +42,7 @@
     "categories": "Categories",
     "allCategories": "All categories",
     "tags": "Tags",
+    "allTags": "All tags",
     "clear": "clear ×"
   },
   "issueList": {

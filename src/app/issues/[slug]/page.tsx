@@ -69,7 +69,7 @@ export default async function IssuePage({
   const locale = await getLocale();
 
   return (
-    <article className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_240px]">
+    <article className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
       <div className="min-w-0 space-y-6">
         <nav className="text-xs text-slate-500">
           <Link href="/" className="hover:text-ink-900">
