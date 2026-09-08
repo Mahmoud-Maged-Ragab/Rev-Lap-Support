@@ -4,6 +4,10 @@ import Link from "next/link";
 import { getLocale, getTranslations } from "next-intl/server";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { SaveIssueButton } from "@/components/SaveIssueButton";
+import { AttachmentGrid } from "@/components/attachments/AttachmentView";
+import { IssueManageCard } from "@/components/IssueManageCard";
+import { readSession } from "@/lib/auth";
+import { canManageContent } from "@/lib/permissions";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +17,20 @@ function fmt(d: Date | string, locale: string) {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatCustomFieldValue(f: { type: string; value: string | null }): string {
+  const raw = f.value ?? "";
+  if (f.type === "checkbox") return raw === "true" ? "Yes" : "No";
+  if (f.type === "multiselect") {
+    try {
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr.join(", ") : raw;
+    } catch {
+      return raw;
+    }
+  }
+  return raw || "—";
 }
 
 function isGoogleDrivePdfUrl(url: string): boolean {
@@ -67,6 +85,8 @@ export default async function IssuePage({
 
   const t = await getTranslations("issueDetail");
   const locale = await getLocale();
+  const session = await readSession();
+  const canManage = !!session && canManageContent(session.role);
 
   return (
     <article className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
@@ -92,6 +112,9 @@ export default async function IssuePage({
           <h1 className="text-2xl font-semibold tracking-tight">
             {issue.title}
           </h1>
+          {issue.subtitle && (
+            <p className="text-sm text-slate-500">{issue.subtitle}</p>
+          )}
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
             <span>{t("created", { date: fmt(issue.createdAt, locale) })}</span>
             <span>·</span>
@@ -100,6 +123,19 @@ export default async function IssuePage({
             <span>{t("views", { count: issue.views })}</span>
           </div>
         </header>
+
+        {issue.customFields.length > 0 && (
+          <section className="grid grid-cols-1 gap-3 border-b border-slate-200 pb-5 sm:grid-cols-2">
+            {issue.customFields.map((f) => (
+              <div key={f.fieldId}>
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {f.label}
+                </div>
+                <div className="mt-0.5 text-sm text-ink-900">{formatCustomFieldValue(f)}</div>
+              </div>
+            ))}
+          </section>
+        )}
 
         <section className="prose-kb space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
@@ -126,6 +162,36 @@ export default async function IssuePage({
             {issue.solution}
           </div>
         </section>
+
+        {issue.attachments.length > 0 && (
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {t("attachments")}
+            </h2>
+            <AttachmentGrid attachments={issue.attachments} />
+          </section>
+        )}
+
+        {issue.sections.length > 0 && (
+          <div className="space-y-6">
+            {issue.sections.map((section, i) => (
+              <section
+                key={section.id}
+                className="space-y-2.5 border-t border-slate-200 pt-6 first:border-t-0 first:pt-0"
+              >
+                <h2 className="text-base font-semibold text-ink-900">
+                  {i + 1}. {section.title || t("untitledSection")}
+                </h2>
+                {section.content && (
+                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-700">
+                    {section.content}
+                  </p>
+                )}
+                <AttachmentGrid attachments={section.attachments} />
+              </section>
+            ))}
+          </div>
+        )}
 
         {issue.videoUrl && (
           <section className="space-y-2">
@@ -167,6 +233,7 @@ export default async function IssuePage({
         <div className="rounded-md border border-slate-200 p-4">
           <SaveIssueButton issueId={issue.id} />
         </div>
+        {canManage && <IssueManageCard issueId={issue.id} title={issue.title} />}
         <div className="rounded-md border border-slate-200 p-4">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
             {t("category")}

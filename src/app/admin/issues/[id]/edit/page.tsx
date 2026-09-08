@@ -2,6 +2,8 @@ import { getIssueById } from "@/lib/issues";
 import { selectAll } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import { requireContentAccess } from "@/lib/guards";
+import { getIssueFormConfig } from "@/lib/issueFormConfig";
+import { listCustomFields } from "@/lib/customFields";
 import { IssueForm } from "../../IssueForm";
 
 export const dynamic = "force-dynamic";
@@ -15,10 +17,12 @@ export default async function EditIssuePage({
 }) {
   await requireContentAccess();
 
-  const [issue, categories, allTags] = await Promise.all([
+  const [issue, categories, allTags, fieldConfig, customFields] = await Promise.all([
     getIssueById(params.id),
     selectAll<Row>("categories", { select: "id,name", order: "name.asc" }),
     selectAll<Row>("tags", { select: "id,name", order: "name.asc" }),
+    getIssueFormConfig(),
+    listCustomFields(),
   ]);
   if (!issue) notFound();
 
@@ -31,16 +35,18 @@ export default async function EditIssuePage({
       <IssueForm
         categories={categories}
         allTags={allTags}
+        fieldConfig={fieldConfig}
+        customFields={customFields}
         initial={{
           id: issue.id,
           title: issue.title,
+          subtitle: issue.subtitle,
           description: issue.description,
-          errorMessage: issue.errorMessage,
-          solution: issue.solution,
           categoryId: issue.categoryId,
           tags: issue.tags.map((t) => ({ id: t.id, name: t.name })),
-          images: issue.images,
-          videoUrl: issue.videoUrl,
+          attachments: issue.attachments,
+          sections: issue.sections,
+          customFields: issue.customFields.map((v) => ({ fieldId: v.fieldId, value: v.value })),
         }}
       />
     </div>

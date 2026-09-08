@@ -96,6 +96,7 @@ export function computeIssueChanges(
     videoUrl: string | null;
     images: string[];
     tags: { id: string; name: string }[];
+    sections?: { title: string; attachments: unknown[] }[];
   },
   input: IssueInput,
   opts: {
@@ -127,6 +128,18 @@ export function computeIssueChanges(
   const imgOld = before.images.join(", ");
   const imgNew = (input.images ?? []).join(", ");
   push("images", imgOld || null, imgNew || null);
+
+  const summarizeSections = (
+    sections: { title: string; attachments: unknown[] }[] | undefined,
+  ) =>
+    (sections ?? [])
+      .map((s) => `${s.title || "Untitled"} (${s.attachments.length})`)
+      .join(", ");
+  push(
+    "sections",
+    summarizeSections(before.sections) || null,
+    summarizeSections(input.sections) || null,
+  );
 
   if (input.tagIds) {
     const oldIds = before.tags.map((t) => t.id).sort();

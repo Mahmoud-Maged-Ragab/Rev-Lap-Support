@@ -8,7 +8,15 @@ import {
   updateRows,
 } from "./supabase";
 import { slugify, uniqueSlug } from "./slug";
-import { normalizeTags, type IssueInput } from "./validation";
+import {
+  normalizeTags,
+  type AttachmentInput,
+  type IssueInput,
+  type SectionInput,
+} from "./validation";
+import { deleteAttachmentFiles, signPaths } from "./uploads";
+import { generateId, nowIso } from "./ids";
+import { loadIssueCustomFieldValues, replaceCustomFieldValues } from "./customFields";
 
 export type IssueListItem = {
   id: string;
@@ -28,6 +36,26 @@ export type IssueListResult = {
   total: number;
 };
 
+export type IssueAttachment = {
+  id: string;
+  kind: "image" | "video" | "pdf" | "document";
+  url: string | null;
+  storagePath: string;
+  filename: string;
+  mime: string;
+  sizeBytes: number;
+  caption: string | null;
+  position: number;
+};
+
+export type IssueSection = {
+  id: string;
+  title: string;
+  content: string;
+  position: number;
+  attachments: IssueAttachment[];
+};
+
 export interface ListOptions {
   q?: string;
   categoryId?: string;
@@ -41,6 +69,7 @@ type IssueRow = {
   id: string;
   title: string;
   slug: string;
+  subtitle: string | null;
   description: string;
   errorMessage: string | null;
   solution: string;
@@ -59,20 +88,8 @@ const ISSUE_LIST_SELECT =
   "id,title,slug,description,views,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name)),creator:admins(email,role)";
 
 const ISSUE_FULL_SELECT =
-  "id,title,slug,description,errorMessage,solution,images,videoUrl,views,categoryId,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name))";
+  "id,title,slug,subtitle,description,errorMessage,solution,images,videoUrl,views,categoryId,createdAt,updatedAt,category:categories(id,name),tags:issue_tags(tag:tags(id,name))";
 
-function generateId(): string {
-  // cuid-shaped opaque string id: timestamp prefix + 16 hex chars of entropy.
-  const ts = Date.now().toString(36);
-  const rand = Array.from(crypto.getRandomValues(new Uint8Array(8)))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return `c${ts}${rand}`;
-}
-
-function nowIso(): string {
-  return new Date().toISOString();
-}
 
 /** Look up issue IDs that match category or tag name search (used by listIssues). */
 async function relatedIssueIdsForSearch(
@@ -199,6 +216,7 @@ function mapIssueFull(r: IssueRow) {
     id: r.id,
     title: r.title,
     slug: r.slug,
+    subtitle: r.subtitle,
     description: r.description,
     errorMessage: r.errorMessage,
     solution: r.solution,
@@ -216,12 +234,194 @@ function mapIssueFull(r: IssueRow) {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Sections + attachments
+// ---------------------------------------------------------------------------
+
+type SectionRow = {
+  id: string;
+  issueId: string;
+  title: string;
+  content: string;
+  position: number;
+};
+
+type AttachmentRow = {
+  id: string;
+  issueId: string;
+  sectionId: string | null;
+  kind: "image" | "video" | "pdf" | "document";
+  storagePath: string;
+  filename: string;
+  mime: string;
+  sizeBytes: number;
+  caption: string | null;
+  position: number;
+};
+
+const SECTION_SELECT = "id,issueId,title,content,position";
+const ATTACHMENT_SELECT =
+  "id,issueId,sectionId,kind,storagePath,filename,mime,sizeBytes,caption,position";
+
+/** Load sections + attachments for one issue, with freshly-signed URLs. */
+async function loadSectionsAndAttachments(
+  issueId: string,
+): Promise<{ sections: IssueSection[]; attachments: IssueAttachment[] }> {
+  const [sectionRows, attachmentRows] = await Promise.all([
+    selectAll<SectionRow>("issue_sections", {
+      select: SECTION_SELECT,
+      filters: { issueId: `eq.${issueId}` },
+      order: "position.asc",
+    }),
+    selectAll<AttachmentRow>("issue_attachments", {
+      select: ATTACHMENT_SELECT,
+      filters: { issueId: `eq.${issueId}` },
+      order: "position.asc",
+    }),
+  ]);
+
+  const urlByPath = await signPaths(attachmentRows.map((a) => a.storagePath));
+
+  const toAttachment = (a: AttachmentRow): IssueAttachment => ({
+    id: a.id,
+    kind: a.kind,
+    url: urlByPath[a.storagePath] ?? null,
+    storagePath: a.storagePath,
+    filename: a.filename,
+    mime: a.mime,
+    sizeBytes: a.sizeBytes,
+    caption: a.caption,
+    position: a.position,
+  });
+
+  const bySection = new Map<string, IssueAttachment[]>();
+  const topLevel: IssueAttachment[] = [];
+  for (const a of attachmentRows) {
+    const mapped = toAttachment(a);
+    if (a.sectionId) {
+      const list = bySection.get(a.sectionId) ?? [];
+      list.push(mapped);
+      bySection.set(a.sectionId, list);
+    } else {
+      topLevel.push(mapped);
+    }
+  }
+
+  const sections: IssueSection[] = sectionRows.map((s) => ({
+    id: s.id,
+    title: s.title,
+    content: s.content,
+    position: s.position,
+    attachments: bySection.get(s.id) ?? [],
+  }));
+
+  return { sections, attachments: topLevel };
+}
+
+/**
+ * Replace all sections/attachments for an issue with the given input
+ * (mirrors the existing "delete then reinsert" pattern used for tags).
+ * Storage objects that are no longer referenced are removed best-effort.
+ */
+async function replaceSectionsAndAttachments(
+  issueId: string,
+  sections: SectionInput[],
+  topLevelAttachments: AttachmentInput[],
+): Promise<void> {
+  const existing = await selectAll<{ storagePath: string }>(
+    "issue_attachments",
+    { select: "storagePath", filters: { issueId: `eq.${issueId}` } },
+  );
+
+  await deleteRows(
+    "issue_attachments",
+    { issueId: `eq.${issueId}` },
+    { returning: false },
+  );
+  await deleteRows(
+    "issue_sections",
+    { issueId: `eq.${issueId}` },
+    { returning: false },
+  );
+
+  const sectionRowsToInsert = sections.map((s, i) => ({
+    id: generateId(),
+    issueId,
+    title: s.title ?? "",
+    content: s.content ?? "",
+    position: i,
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+  }));
+  if (sectionRowsToInsert.length > 0) {
+    await insertRow("issue_sections", sectionRowsToInsert, {
+      returning: false,
+    });
+  }
+
+  const attachmentRowsToInsert: Record<string, unknown>[] = [];
+  topLevelAttachments.forEach((a, i) => {
+    attachmentRowsToInsert.push({
+      id: generateId(),
+      issueId,
+      sectionId: null,
+      kind: a.kind,
+      storagePath: a.storagePath,
+      filename: a.filename,
+      mime: a.mime,
+      sizeBytes: a.sizeBytes,
+      caption: a.caption ?? null,
+      position: i,
+      createdAt: nowIso(),
+    });
+  });
+  sections.forEach((s, sIdx) => {
+    const sectionId = sectionRowsToInsert[sIdx].id;
+    (s.attachments ?? []).forEach((a, i) => {
+      attachmentRowsToInsert.push({
+        id: generateId(),
+        issueId,
+        sectionId,
+        kind: a.kind,
+        storagePath: a.storagePath,
+        filename: a.filename,
+        mime: a.mime,
+        sizeBytes: a.sizeBytes,
+        caption: a.caption ?? null,
+        position: i,
+        createdAt: nowIso(),
+      });
+    });
+  });
+  if (attachmentRowsToInsert.length > 0) {
+    await insertRow("issue_attachments", attachmentRowsToInsert, {
+      returning: false,
+    });
+  }
+
+  const keptPaths = new Set(
+    attachmentRowsToInsert.map((r) => r.storagePath as string),
+  );
+  const orphaned = existing
+    .map((e) => e.storagePath)
+    .filter((p) => !keptPaths.has(p));
+  if (orphaned.length > 0) {
+    await deleteAttachmentFiles(orphaned).catch(() => {});
+  }
+}
+
 export async function getIssueBySlug(slug: string) {
   const row = await selectOne<IssueRow>("issues", {
     select: ISSUE_FULL_SELECT,
     filters: { slug: `eq.${slug}` },
   });
-  return row ? mapIssueFull(row) : null;
+  if (!row) return null;
+  const issue = mapIssueFull(row);
+  const [{ sections, attachments }, customFields] = await Promise.all([
+    loadSectionsAndAttachments(row.id),
+    loadIssueCustomFieldValues(row.id),
+  ]);
+  return { ...issue, sections, attachments, customFields };
 }
 
 export async function getIssueById(id: string) {
@@ -229,7 +429,13 @@ export async function getIssueById(id: string) {
     select: ISSUE_FULL_SELECT,
     filters: { id: `eq.${id}` },
   });
-  return row ? mapIssueFull(row) : null;
+  if (!row) return null;
+  const issue = mapIssueFull(row);
+  const [{ sections, attachments }, customFields] = await Promise.all([
+    loadSectionsAndAttachments(row.id),
+    loadIssueCustomFieldValues(row.id),
+  ]);
+  return { ...issue, sections, attachments, customFields };
 }
 
 export async function incrementViews(id: string) {
@@ -301,6 +507,7 @@ export async function createIssue(input: IssueInput, adminId?: string) {
       id,
       title: input.title,
       slug,
+      subtitle: input.subtitle ?? null,
       description: input.description,
       errorMessage: input.errorMessage ?? null,
       solution: input.solution,
@@ -323,25 +530,42 @@ export async function createIssue(input: IssueInput, adminId?: string) {
     );
   }
 
+  await Promise.all([
+    replaceSectionsAndAttachments(id, input.sections ?? [], input.attachments ?? []),
+    replaceCustomFieldValues(id, input.customFieldValues ?? []),
+  ]);
+
   return inserted[0] ?? { id, slug };
 }
 
 export async function updateIssue(id: string, input: IssueInput) {
   const tagIds = await resolveTagIds(input);
 
+  // `images` (legacy PDF-links) and `videoUrl` (legacy single video) predate
+  // the sections/attachments system and are no longer sent by the current
+  // authoring form. Only touch them when the caller explicitly provided a
+  // value — otherwise leave whatever an old issue already has, instead of
+  // wiping it to `[]`/`null` on every unrelated edit.
+  const patch: Record<string, unknown> = {
+    title: input.title,
+    subtitle: input.subtitle ?? null,
+    description: input.description,
+    errorMessage: input.errorMessage ?? null,
+    solution: input.solution,
+    categoryId: input.categoryId || null,
+    updatedAt: nowIso(),
+  };
+  if (input.images !== undefined) {
+    patch.images = JSON.stringify(input.images);
+  }
+  if (input.videoUrl !== undefined) {
+    patch.videoUrl = input.videoUrl;
+  }
+
   const updated = await updateRows<{ id: string; slug: string }>(
     "issues",
     { id: `eq.${id}` },
-    {
-      title: input.title,
-      description: input.description,
-      errorMessage: input.errorMessage ?? null,
-      solution: input.solution,
-      images: JSON.stringify(input.images ?? []),
-      videoUrl: input.videoUrl ?? null,
-      categoryId: input.categoryId || null,
-      updatedAt: nowIso(),
-    },
+    patch,
     { select: "id,slug" },
   );
 
@@ -355,13 +579,37 @@ export async function updateIssue(id: string, input: IssueInput) {
     );
   }
 
+  await Promise.all([
+    replaceSectionsAndAttachments(id, input.sections ?? [], input.attachments ?? []),
+    replaceCustomFieldValues(id, input.customFieldValues ?? []),
+  ]);
+
   return updated[0] ?? { id, slug: "" };
 }
 
 export async function deleteIssue(id: string) {
+  const attachments = await selectAll<{ storagePath: string }>(
+    "issue_attachments",
+    { select: "storagePath", filters: { issueId: `eq.${id}` } },
+  );
+
   // Remove join rows first in case there's no ON DELETE CASCADE wired up.
   await deleteRows("issue_tags", { issueId: `eq.${id}` }, { returning: false });
+  await deleteRows(
+    "issue_attachments",
+    { issueId: `eq.${id}` },
+    { returning: false },
+  );
+  await deleteRows(
+    "issue_sections",
+    { issueId: `eq.${id}` },
+    { returning: false },
+  );
   await deleteRows("issues", { id: `eq.${id}` }, { returning: false });
+
+  await deleteAttachmentFiles(attachments.map((a) => a.storagePath)).catch(
+    () => {},
+  );
 }
 
 function safeParseImages(raw: string | null | undefined): string[] {
