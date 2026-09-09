@@ -3,7 +3,6 @@ import { selectAll } from "@/lib/supabase";
 import { notFound } from "next/navigation";
 import { requireContentAccess } from "@/lib/guards";
 import { getIssueFormConfig } from "@/lib/issueFormConfig";
-import { listCustomFields } from "@/lib/customFields";
 import { IssueForm } from "../../IssueForm";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +16,11 @@ export default async function EditIssuePage({
 }) {
   await requireContentAccess();
 
-  const [issue, categories, allTags, fieldConfig, customFields] = await Promise.all([
+  const [issue, categories, allTags, fieldConfig] = await Promise.all([
     getIssueById(params.id),
     selectAll<Row>("categories", { select: "id,name", order: "name.asc" }),
     selectAll<Row>("tags", { select: "id,name", order: "name.asc" }),
     getIssueFormConfig(),
-    listCustomFields(),
   ]);
   if (!issue) notFound();
 
@@ -36,7 +34,6 @@ export default async function EditIssuePage({
         categories={categories}
         allTags={allTags}
         fieldConfig={fieldConfig}
-        customFields={customFields}
         initial={{
           id: issue.id,
           title: issue.title,
@@ -46,7 +43,6 @@ export default async function EditIssuePage({
           tags: issue.tags.map((t) => ({ id: t.id, name: t.name })),
           attachments: issue.attachments,
           sections: issue.sections,
-          customFields: issue.customFields.map((v) => ({ fieldId: v.fieldId, value: v.value })),
         }}
       />
     </div>

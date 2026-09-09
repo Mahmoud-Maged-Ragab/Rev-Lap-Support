@@ -30,13 +30,45 @@ export const AttachmentInputSchema = z.object({
 });
 export type AttachmentInput = z.infer<typeof AttachmentInputSchema>;
 
+/**
+ * `"legacy"` is a free-form title + description + mixed attachments block
+ * (the original Sections feature). Every other value is a single-purpose
+ * content element added via the Issue Builder's "Add Element" menu — see
+ * lib/sectionElements.ts for what each one actually uses (title vs. content
+ * vs. attachments) and supabase/sql/005_section_element_type.sql for the
+ * backing column.
+ */
+export const SectionElementTypeSchema = z.enum([
+  "legacy",
+  "headline",
+  "subheadline",
+  "paragraph",
+  "richtext",
+  "video",
+  "pdf",
+  "doc",
+  "image",
+]);
+
+// Basic guard against a richtext block's stored markdown-lite source somehow
+// carrying raw markup — the editor (RichTextEditor.tsx) can't produce this by
+// normal use, but the server shouldn't blindly trust client-sent strings for
+// content that gets rendered on the public issue page.
+const DANGEROUS_MARKUP = /<\s*(script|iframe|object|embed)\b|on\w+\s*=|javascript:/i;
+
 /** A section groups a title + description with its own attachments. */
-export const SectionInputSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().max(200).optional().default(""),
-  content: z.string().max(10_000).optional().default(""),
-  attachments: z.array(AttachmentInputSchema).max(30).optional().default([]),
-});
+export const SectionInputSchema = z
+  .object({
+    id: z.string().optional(),
+    type: SectionElementTypeSchema.optional().default("legacy"),
+    title: z.string().max(200).optional().default(""),
+    content: z.string().max(10_000).optional().default(""),
+    attachments: z.array(AttachmentInputSchema).max(30).optional().default([]),
+  })
+  .refine((v) => v.type !== "richtext" || !DANGEROUS_MARKUP.test(v.content), {
+    message: "Rich text content contains disallowed markup",
+    path: ["content"],
+  });
 export type SectionInput = z.infer<typeof SectionInputSchema>;
 
 export const IssueInputSchema = z.object({
@@ -83,20 +115,6 @@ export const IssueInputSchema = z.object({
   // Detailed-mode: user-organized content sections, each with its own
   // attachments. Optional — a "quick" issue has none.
   sections: z.array(SectionInputSchema).max(30).optional().default([]),
-  // Values entered into data-driven custom fields (see lib/customFields.ts).
-  // `fieldId` references `issue_custom_fields.id`; required/type validation
-  // against the live field definitions happens server-side in the route
-  // handler (can't be expressed statically here since fields are DB-driven).
-  customFieldValues: z
-    .array(
-      z.object({
-        fieldId: z.string().min(1).max(64),
-        value: z.string().max(5_000).optional().nullable(),
-      }),
-    )
-    .max(50)
-    .optional()
-    .default([]),
 });
 
 export type IssueInput = z.infer<typeof IssueInputSchema>;
@@ -118,16 +136,8 @@ export const TagInputSchema = z.object({
   name: z.string().min(1).max(40),
 });
 
-/** A layout entry's key is either a built-in FieldKey or `custom:<uuid-ish id>`
- *  — see lib/issueFormFields.ts's CUSTOM_FIELD_PREFIX. */
-const LayoutKeySchema = z
-  .string()
-  .min(1)
-  .max(100)
-  .refine(
-    (v) => (FIELD_KEYS as readonly string[]).includes(v) || /^custom:[\w-]{1,80}$/.test(v),
-    { message: "Invalid field key" },
-  );
+/** A layout entry's key is always a built-in FieldKey. */
+const LayoutKeySchema = z.enum(FIELD_KEYS);
 
 /** The drag-and-drop form builder's saved layout: order + enabled state. */
 export const IssueFormConfigSchema = z
@@ -150,60 +160,6 @@ export const IssueFormConfigSchema = z
       ),
     { message: "Required fields cannot be disabled" },
   );
-
-// ---------------------------------------------------------------------------
-// Custom fields (data-driven — see lib/customFields.ts)
-// ---------------------------------------------------------------------------
-
-export const CustomFieldTypeSchema = z.enum([
-  "text",
-  "textarea",
-  "number",
-  "date",
-  "select",
-  "checkbox",
-  "radio",
-  "url",
-  "email",
-  "phone",
-  "multiselect",
-]);
-export type CustomFieldType = z.infer<typeof CustomFieldTypeSchema>;
-
-const OPTION_TYPES = new Set(["select", "radio", "multiselect"]);
-
-export const CustomFieldInputSchema = z
-  .object({
-    // Machine key — lowercase snake_case, stable identifier separate from
-    // the editable display label.
-    name: z
-      .string()
-      .trim()
-      .min(1)
-      .max(60)
-      .regex(/^[a-z][a-z0-9_]*$/, "Use lowercase letters, numbers, and underscores only"),
-    label: z.string().trim().min(1).max(100),
-    type: CustomFieldTypeSchema,
-    required: z.boolean().default(false),
-    placeholder: z
-      .string()
-      .max(200)
-      .optional()
-      .nullable()
-      .transform((v) => (v && v.trim() ? v.trim() : null)),
-    description: z
-      .string()
-      .max(500)
-      .optional()
-      .nullable()
-      .transform((v) => (v && v.trim() ? v.trim() : null)),
-    options: z.array(z.string().trim().min(1).max(100)).max(50).optional().nullable(),
-  })
-  .refine((v) => !OPTION_TYPES.has(v.type) || (v.options && v.options.length > 0), {
-    message: "This field type needs at least one option",
-    path: ["options"],
-  });
-export type CustomFieldInput = z.infer<typeof CustomFieldInputSchema>;
 
 export function normalizeTags(tags: string | string[] | undefined): string[] {
   if (!tags) return [];

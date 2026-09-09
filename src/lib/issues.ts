@@ -5,6 +5,7 @@ import {
   selectAll,
   selectOne,
   selectRows,
+  SupabaseError,
   updateRows,
 } from "./supabase";
 import { slugify, uniqueSlug } from "./slug";
@@ -16,7 +17,6 @@ import {
 } from "./validation";
 import { deleteAttachmentFiles, signPaths } from "./uploads";
 import { generateId, nowIso } from "./ids";
-import { loadIssueCustomFieldValues, replaceCustomFieldValues } from "./customFields";
 
 export type IssueListItem = {
   id: string;
@@ -50,6 +50,7 @@ export type IssueAttachment = {
 
 export type IssueSection = {
   id: string;
+  type: string;
   title: string;
   content: string;
   position: number;
@@ -241,6 +242,7 @@ function mapIssueFull(r: IssueRow) {
 type SectionRow = {
   id: string;
   issueId: string;
+  type: string;
   title: string;
   content: string;
   position: number;
@@ -259,20 +261,37 @@ type AttachmentRow = {
   position: number;
 };
 
-const SECTION_SELECT = "id,issueId,title,content,position";
+const SECTION_SELECT = "id,issueId,type,title,content,position";
+// Pre-005-migration fallback — same shape minus `type`, so existing sections
+// still load (as "legacy") if that column doesn't exist yet on this DB.
+const SECTION_SELECT_LEGACY = "id,issueId,title,content,position";
 const ATTACHMENT_SELECT =
   "id,issueId,sectionId,kind,storagePath,filename,mime,sizeBytes,caption,position";
+
+async function selectSectionRows(issueId: string): Promise<SectionRow[]> {
+  try {
+    return await selectAll<SectionRow>("issue_sections", {
+      select: SECTION_SELECT,
+      filters: { issueId: `eq.${issueId}` },
+      order: "position.asc",
+    });
+  } catch (err) {
+    if (!(err instanceof SupabaseError)) throw err;
+    const rows = await selectAll<Omit<SectionRow, "type">>("issue_sections", {
+      select: SECTION_SELECT_LEGACY,
+      filters: { issueId: `eq.${issueId}` },
+      order: "position.asc",
+    });
+    return rows.map((r) => ({ ...r, type: "legacy" }));
+  }
+}
 
 /** Load sections + attachments for one issue, with freshly-signed URLs. */
 async function loadSectionsAndAttachments(
   issueId: string,
 ): Promise<{ sections: IssueSection[]; attachments: IssueAttachment[] }> {
   const [sectionRows, attachmentRows] = await Promise.all([
-    selectAll<SectionRow>("issue_sections", {
-      select: SECTION_SELECT,
-      filters: { issueId: `eq.${issueId}` },
-      order: "position.asc",
-    }),
+    selectSectionRows(issueId),
     selectAll<AttachmentRow>("issue_attachments", {
       select: ATTACHMENT_SELECT,
       filters: { issueId: `eq.${issueId}` },
@@ -309,6 +328,7 @@ async function loadSectionsAndAttachments(
 
   const sections: IssueSection[] = sectionRows.map((s) => ({
     id: s.id,
+    type: s.type,
     title: s.title,
     content: s.content,
     position: s.position,
@@ -347,6 +367,7 @@ async function replaceSectionsAndAttachments(
   const sectionRowsToInsert = sections.map((s, i) => ({
     id: generateId(),
     issueId,
+    type: s.type ?? "legacy",
     title: s.title ?? "",
     content: s.content ?? "",
     position: i,
@@ -354,9 +375,22 @@ async function replaceSectionsAndAttachments(
     updatedAt: nowIso(),
   }));
   if (sectionRowsToInsert.length > 0) {
-    await insertRow("issue_sections", sectionRowsToInsert, {
-      returning: false,
-    });
+    try {
+      await insertRow("issue_sections", sectionRowsToInsert, {
+        returning: false,
+      });
+    } catch (err) {
+      // Pre-005-migration fallback: `type` doesn't exist on this DB yet —
+      // save everything else so issue authoring still works, and let the
+      // section fall back to "legacy" on read (see selectSectionRows above)
+      // until the migration is applied.
+      if (!(err instanceof SupabaseError)) throw err;
+      await insertRow(
+        "issue_sections",
+        sectionRowsToInsert.map(({ type: _type, ...rest }) => rest),
+        { returning: false },
+      );
+    }
   }
 
   const attachmentRowsToInsert: Record<string, unknown>[] = [];
@@ -417,11 +451,8 @@ export async function getIssueBySlug(slug: string) {
   });
   if (!row) return null;
   const issue = mapIssueFull(row);
-  const [{ sections, attachments }, customFields] = await Promise.all([
-    loadSectionsAndAttachments(row.id),
-    loadIssueCustomFieldValues(row.id),
-  ]);
-  return { ...issue, sections, attachments, customFields };
+  const { sections, attachments } = await loadSectionsAndAttachments(row.id);
+  return { ...issue, sections, attachments };
 }
 
 export async function getIssueById(id: string) {
@@ -431,11 +462,8 @@ export async function getIssueById(id: string) {
   });
   if (!row) return null;
   const issue = mapIssueFull(row);
-  const [{ sections, attachments }, customFields] = await Promise.all([
-    loadSectionsAndAttachments(row.id),
-    loadIssueCustomFieldValues(row.id),
-  ]);
-  return { ...issue, sections, attachments, customFields };
+  const { sections, attachments } = await loadSectionsAndAttachments(row.id);
+  return { ...issue, sections, attachments };
 }
 
 export async function incrementViews(id: string) {
@@ -530,10 +558,7 @@ export async function createIssue(input: IssueInput, adminId?: string) {
     );
   }
 
-  await Promise.all([
-    replaceSectionsAndAttachments(id, input.sections ?? [], input.attachments ?? []),
-    replaceCustomFieldValues(id, input.customFieldValues ?? []),
-  ]);
+  await replaceSectionsAndAttachments(id, input.sections ?? [], input.attachments ?? []);
 
   return inserted[0] ?? { id, slug };
 }
@@ -579,10 +604,7 @@ export async function updateIssue(id: string, input: IssueInput) {
     );
   }
 
-  await Promise.all([
-    replaceSectionsAndAttachments(id, input.sections ?? [], input.attachments ?? []),
-    replaceCustomFieldValues(id, input.customFieldValues ?? []),
-  ]);
+  await replaceSectionsAndAttachments(id, input.sections ?? [], input.attachments ?? []);
 
   return updated[0] ?? { id, slug: "" };
 }

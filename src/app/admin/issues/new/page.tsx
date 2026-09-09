@@ -1,7 +1,6 @@
 import { selectAll } from "@/lib/supabase";
 import { requireContentAccess } from "@/lib/guards";
 import { getIssueFormConfig } from "@/lib/issueFormConfig";
-import { listCustomFields } from "@/lib/customFields";
 import { IssueForm } from "../IssueForm";
 
 export const dynamic = "force-dynamic";
@@ -11,11 +10,10 @@ type Row = { id: string; name: string };
 export default async function NewIssuePage() {
   await requireContentAccess();
 
-  const [categories, allTags, fieldConfig, customFields] = await Promise.all([
+  const [categories, allTags, fieldConfig] = await Promise.all([
     selectAll<Row>("categories", { select: "id,name", order: "name.asc" }),
     selectAll<Row>("tags", { select: "id,name", order: "name.asc" }),
     getIssueFormConfig(),
-    listCustomFields(),
   ]);
   return (
     <div className="max-w-3xl space-y-5">
@@ -27,7 +25,6 @@ export default async function NewIssuePage() {
         categories={categories}
         allTags={allTags}
         fieldConfig={fieldConfig}
-        customFields={customFields}
       />
     </div>
   );

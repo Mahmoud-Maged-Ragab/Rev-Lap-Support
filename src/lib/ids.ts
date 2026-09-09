@@ -1,6 +1,6 @@
 /** Shared id/timestamp helpers — split out so lib modules that reference
- *  each other (e.g. `issues.ts` and `customFields.ts`) don't need to import
- *  from one another just to generate a row id. */
+ *  each other don't need to import from one another just to generate a row
+ *  id. */
 
 /** cuid-shaped opaque string id: timestamp prefix + 16 hex chars of entropy. */
 export function generateId(): string {

@@ -12,7 +12,25 @@
     "menu": "Menu"
   },
   "footer": {
-    "text": "Internal use. © {year} Revenue Lab 360. All rights reserved."
+    "brandName": "Revenue Lab 360 Support",
+    "brandDescription": "A knowledge base for finding and managing documented support issues and their solutions.",
+    "navigationHeading": "Navigation",
+    "legalHeading": "Legal",
+    "supportHeading": "Support",
+    "home": "Home",
+    "categories": "Categories",
+    "savedIssues": "Saved Issues",
+    "terms": "Terms of Service",
+    "privacy": "Privacy Policy",
+    "guide": "System Guide",
+    "supportText": "For account access or platform support, contact your Revenue Lab 360 administrator.",
+    "copyright": "© {year} Revenue Lab 360. All rights reserved.",
+    "internalUse": "Internal use"
+  },
+  "legal": {
+    "backToHome": "← Back to Home",
+    "lastUpdated": "Last updated",
+    "tableOfContents": "Table of contents"
   },
   "languageSwitcher": {
     "label": "Language",
@@ -77,7 +95,8 @@
     "password": "Password",
     "signIn": "Sign in",
     "signingIn": "Signing in…",
-    "failed": "Login failed"
+    "failed": "Login failed",
+    "consent": "By signing in, you agree to our <terms>Terms of Service</terms> and <privacy>Privacy Policy</privacy>."
   },
   "adminNav": {
     "ownerDashboard": "Owner dashboard",

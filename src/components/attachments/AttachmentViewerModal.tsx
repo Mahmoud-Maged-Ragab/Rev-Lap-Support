@@ -49,7 +49,7 @@ export function AttachmentViewerModal({
       aria-label={target.filename}
     >
       <div
-        className="flex h-full w-full flex-col overflow-hidden bg-white sm:h-[85vh] sm:max-w-4xl sm:rounded-lg sm:border sm:border-slate-200 sm:shadow-xl"
+        className="flex h-full w-full flex-col overflow-hidden bg-white sm:h-[92vh] sm:max-w-6xl sm:rounded-lg sm:border sm:border-slate-200 sm:shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">

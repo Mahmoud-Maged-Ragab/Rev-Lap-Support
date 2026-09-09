@@ -12,7 +12,25 @@
     "menu": "القائمة"
   },
   "footer": {
-    "text": "للاستخدام الداخلي. © {year} Revenue Lab 360. جميع الحقوق محفوظة."
+    "brandName": "دعم Revenue Lab 360",
+    "brandDescription": "قاعدة معرفة للوصول إلى المشكلات الموثّقة وحلولها وإدارتها.",
+    "navigationHeading": "التنقل",
+    "legalHeading": "قانوني",
+    "supportHeading": "الدعم",
+    "home": "الرئيسية",
+    "categories": "التصنيفات",
+    "savedIssues": "المشكلات المحفوظة",
+    "terms": "شروط الخدمة",
+    "privacy": "سياسة الخصوصية",
+    "guide": "دليل النظام",
+    "supportText": "للحصول على دعم الوصول إلى الحساب أو المنصة، تواصل مع مسؤول Revenue Lab 360 الخاص بك.",
+    "copyright": "© {year} Revenue Lab 360. جميع الحقوق محفوظة.",
+    "internalUse": "للاستخدام الداخلي"
+  },
+  "legal": {
+    "backToHome": "→ العودة إلى الرئيسية",
+    "lastUpdated": "آخر تحديث",
+    "tableOfContents": "جدول المحتويات"
   },
   "languageSwitcher": {
     "label": "اللغة",
@@ -77,7 +95,8 @@
     "password": "كلمة المرور",
     "signIn": "تسجيل الدخول",
     "signingIn": "جارٍ تسجيل الدخول…",
-    "failed": "فشل تسجيل الدخول"
+    "failed": "فشل تسجيل الدخول",
+    "consent": "بتسجيل الدخول، فإنك توافق على <terms>شروط الخدمة</terms> و<privacy>سياسة الخصوصية</privacy> الخاصة بنا."
   },
   "adminNav": {
     "ownerDashboard": "لوحة المالك",

@@ -8,6 +8,8 @@ import { AttachmentGrid } from "@/components/attachments/AttachmentView";
 import { IssueManageCard } from "@/components/IssueManageCard";
 import { readSession } from "@/lib/auth";
 import { canManageContent } from "@/lib/permissions";
+import { isRichTextEmpty, renderRichTextHtml } from "@/lib/richText";
+import type { IssueSection } from "@/lib/issues";
 
 export const dynamic = "force-dynamic";
 
@@ -19,18 +21,66 @@ function fmt(d: Date | string, locale: string) {
   });
 }
 
-function formatCustomFieldValue(f: { type: string; value: string | null }): string {
-  const raw = f.value ?? "";
-  if (f.type === "checkbox") return raw === "true" ? "Yes" : "No";
-  if (f.type === "multiselect") {
-    try {
-      const arr = JSON.parse(raw);
-      return Array.isArray(arr) ? arr.join(", ") : raw;
-    } catch {
-      return raw;
-    }
+function isSectionVisible(section: { title: string; content: string; attachments: unknown[] }): boolean {
+  return !!section.title.trim() || !!section.content.trim() || section.attachments.length > 0;
+}
+
+/**
+ * Renders one content element by its `type` — a "legacy" section (every
+ * section saved before the Issue Builder's "Add Element" menu existed, or
+ * still created through the section-level editor) keeps its original
+ * numbered-heading + description + attachments layout; anything added as a
+ * specific element type renders just the one thing it holds, un-numbered,
+ * as a normal flowing content block.
+ */
+function SectionBody({
+  section,
+  legacyNumber,
+  untitledLabel,
+}: {
+  section: IssueSection;
+  legacyNumber: number | null;
+  untitledLabel: string;
+}) {
+  switch (section.type) {
+    case "headline":
+      return <h2 className="text-2xl font-bold tracking-tight text-ink-900">{section.title}</h2>;
+    case "subheadline":
+      return <h3 className="text-lg font-semibold text-slate-700">{section.title}</h3>;
+    case "paragraph":
+      return (
+        <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-700">
+          {section.content}
+        </p>
+      );
+    case "richtext":
+      return isRichTextEmpty(section.content) ? null : (
+        <div
+          className="prose-kb space-y-3 text-[15px] leading-relaxed text-slate-700"
+          dangerouslySetInnerHTML={{ __html: renderRichTextHtml(section.content) }}
+        />
+      );
+    case "video":
+    case "pdf":
+    case "doc":
+    case "image":
+      return <AttachmentGrid attachments={section.attachments} />;
+    default:
+      // "legacy"
+      return (
+        <>
+          <h2 className="text-base font-semibold text-ink-900">
+            {legacyNumber}. {section.title || untitledLabel}
+          </h2>
+          {section.content && (
+            <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-700">
+              {section.content}
+            </p>
+          )}
+          <AttachmentGrid attachments={section.attachments} />
+        </>
+      );
   }
-  return raw || "—";
 }
 
 function isGoogleDrivePdfUrl(url: string): boolean {
@@ -88,6 +138,8 @@ export default async function IssuePage({
   const session = await readSession();
   const canManage = !!session && canManageContent(session.role);
 
+  const visibleSections = issue.sections.filter(isSectionVisible);
+
   return (
     <article className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
       <div className="min-w-0 space-y-6">
@@ -124,19 +176,6 @@ export default async function IssuePage({
           </div>
         </header>
 
-        {issue.customFields.length > 0 && (
-          <section className="grid grid-cols-1 gap-3 border-b border-slate-200 pb-5 sm:grid-cols-2">
-            {issue.customFields.map((f) => (
-              <div key={f.fieldId}>
-                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {f.label}
-                </div>
-                <div className="mt-0.5 text-sm text-ink-900">{formatCustomFieldValue(f)}</div>
-              </div>
-            ))}
-          </section>
-        )}
-
         <section className="prose-kb space-y-2">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
             {t("problem")}
@@ -154,14 +193,16 @@ export default async function IssuePage({
             </pre>
           </section>
         )}
-        <section className="prose-kb space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-            {t("solution")}
-          </h2>
-          <div className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-4 text-[15px] leading-relaxed">
-            {issue.solution}
-          </div>
-        </section>
+        {issue.solution && (
+          <section className="prose-kb space-y-2">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {t("solution")}
+            </h2>
+            <div className="whitespace-pre-wrap rounded-md border border-slate-200 bg-slate-50 p-4 text-[15px] leading-relaxed">
+              {issue.solution}
+            </div>
+          </section>
+        )}
 
         {issue.attachments.length > 0 && (
           <section className="space-y-2">
@@ -172,24 +213,26 @@ export default async function IssuePage({
           </section>
         )}
 
-        {issue.sections.length > 0 && (
+        {visibleSections.length > 0 && (
           <div className="space-y-6">
-            {issue.sections.map((section, i) => (
-              <section
-                key={section.id}
-                className="space-y-2.5 border-t border-slate-200 pt-6 first:border-t-0 first:pt-0"
-              >
-                <h2 className="text-base font-semibold text-ink-900">
-                  {i + 1}. {section.title || t("untitledSection")}
-                </h2>
-                {section.content && (
-                  <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-slate-700">
-                    {section.content}
-                  </p>
-                )}
-                <AttachmentGrid attachments={section.attachments} />
-              </section>
-            ))}
+            {(() => {
+              let legacyCount = 0;
+              return visibleSections.map((section) => {
+                const legacyNumber = section.type === "legacy" ? ++legacyCount : null;
+                return (
+                  <section
+                    key={section.id}
+                    className="space-y-2.5 border-t border-slate-200 pt-6 first:border-t-0 first:pt-0"
+                  >
+                    <SectionBody
+                      section={section}
+                      legacyNumber={legacyNumber}
+                      untitledLabel={t("untitledSection")}
+                    />
+                  </section>
+                );
+              });
+            })()}
           </div>
         )}
 

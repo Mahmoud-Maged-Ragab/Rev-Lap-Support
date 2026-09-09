@@ -14,6 +14,7 @@ import {
 import { dir, type Locale } from "@/i18n/config";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { MobileNav } from "@/components/MobileNav";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getTranslations("metadata");
@@ -31,7 +32,6 @@ export default async function RootLayout({
   const locale = (await getLocale()) as Locale;
   const messages = await getMessages();
   const t = await getTranslations("nav");
-  const tf = await getTranslations("footer");
 
   const session = await readSession();
   const role = session ? normalizeRole(session.role) : null;
@@ -54,7 +54,7 @@ export default async function RootLayout({
 
   return (
     <html lang={locale} dir={dir(locale)}>
-      <body className="min-h-screen bg-white text-ink-900">
+      <body className="flex min-h-screen flex-col bg-white text-ink-900">
         <NextIntlClientProvider messages={messages}>
           <header className="relative border-b border-slate-200 bg-white">
             <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
@@ -98,10 +98,10 @@ export default async function RootLayout({
               <MobileNav links={navLinks} menuLabel={t("menu")} />
             </div>
           </header>
-          <main className="mx-auto max-w-6xl px-4 py-6 sm:py-8">{children}</main>
-          <footer className="border-t border-slate-200 py-6 text-center text-xs text-slate-500">
-            {tf("text", { year: new Date().getFullYear() })}
-          </footer>
+          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:py-8">
+            {children}
+          </main>
+          <SiteFooter />
         </NextIntlClientProvider>
       </body>
     </html>

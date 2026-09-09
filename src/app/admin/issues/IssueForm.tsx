@@ -23,30 +23,24 @@ import {
   IconChevronDown,
   IconChevronUp,
   IconGripVertical,
-  IconPencil,
   IconPlus,
   IconX,
 } from "@tabler/icons-react";
-import type { AttachmentKind, DraftAttachment } from "@/components/attachments/types";
+import type {
+  AttachmentKind,
+  DraftAttachment,
+} from "@/components/attachments/types";
 import { AttachmentUploader } from "@/components/attachments/AttachmentUploader";
 import { VideoAttachmentField } from "@/components/issue-form/VideoAttachmentField";
 import { SectionsList } from "@/components/issue-form/SectionsList";
 import type { DraftSection } from "@/components/issue-form/types";
-import { CustomFieldModal } from "@/components/issue-form/CustomFieldModal";
-import { CustomFieldInput } from "@/components/issue-form/CustomFieldInput";
-import type { CustomFieldDef } from "@/lib/customFields";
+import { SECTION_ELEMENTS, type SectionElementType } from "@/lib/sectionElements";
 import {
   DEFAULT_FIELD_CONFIG,
   FIELD_REGISTRY,
-  addNewFieldEnabled,
-  customFieldIdFromKey,
-  customFieldLayoutKey,
   enabledFieldOrder,
-  isCustomFieldKey,
-  isFieldKey,
   isRequiredField,
   moveEnabledField,
-  removeFieldEntry,
   reorderEnabledFields,
   setFieldEnabled,
   type FieldConfigEntry,
@@ -67,12 +61,11 @@ type InitialAttachment = {
 
 type InitialSection = {
   id: string;
+  type?: string;
   title: string;
   content: string;
   attachments: InitialAttachment[];
 };
-
-type InitialCustomFieldValue = { fieldId: string; value: string | null };
 
 export type IssueFormInitial = {
   id?: string;
@@ -83,7 +76,6 @@ export type IssueFormInitial = {
   tags?: { id: string; name: string }[];
   attachments?: InitialAttachment[];
   sections?: InitialSection[];
-  customFields?: InitialCustomFieldValue[];
 };
 
 type TagOption = { id: string; name: string };
@@ -103,10 +95,19 @@ function toDraftAttachment(a: InitialAttachment): DraftAttachment {
   };
 }
 
+const KNOWN_ELEMENT_TYPES = new Set(SECTION_ELEMENTS.map((e) => e.type));
+
+function toSectionType(type: string | undefined): SectionElementType | "legacy" {
+  return type && KNOWN_ELEMENT_TYPES.has(type as SectionElementType)
+    ? (type as SectionElementType)
+    : "legacy";
+}
+
 function toDraftSection(s: InitialSection): DraftSection {
   return {
     clientId: s.id,
     id: s.id,
+    type: toSectionType(s.type),
     title: s.title,
     content: s.content,
     attachments: s.attachments.map(toDraftAttachment),
@@ -126,18 +127,16 @@ function toAttachmentPayload(a: DraftAttachment) {
 }
 
 /**
- * Drag handle + remove/edit-field row rendered above every field's own
- * content, directly on the Issue Creation/Edit form (there is no separate
- * builder page — dragging a field here reorders the real form immediately,
- * and the new order is autosaved to the shared layout config for all future
- * issues, custom fields included).
+ * Drag handle + remove-field row rendered above every field's own content,
+ * directly on the Issue Creation/Edit form (there is no separate builder
+ * page — dragging a field here reorders the real form immediately, and the
+ * new order is autosaved to the shared layout config for all future issues).
  */
 function SortableFieldBlock({
   fieldKey,
   label,
   requiredBadge,
   onRemove,
-  onEdit,
   onMoveUp,
   onMoveDown,
   canMoveUp,
@@ -148,14 +147,20 @@ function SortableFieldBlock({
   label: string;
   requiredBadge: boolean;
   onRemove: (() => void) | null;
-  onEdit?: () => void;
   onMoveUp: () => void;
   onMoveDown: () => void;
   canMoveUp: boolean;
   canMoveDown: boolean;
   children: React.ReactNode;
 }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({
     id: fieldKey,
   });
   const style = { transform: CSS.Transform.toString(transform), transition };
@@ -204,21 +209,11 @@ function SortableFieldBlock({
             <IconChevronDown size={14} />
           </button>
         </div>
-        {onEdit && (
-          <button
-            type="button"
-            onClick={onEdit}
-            className={"rounded p-1 text-slate-300 hover:bg-slate-100 hover:text-slate-600" + (onRemove ? "" : " ml-auto sm:ml-0")}
-            aria-label={`Edit ${label}`}
-          >
-            <IconPencil size={14} />
-          </button>
-        )}
         {onRemove && (
           <button
             type="button"
             onClick={onRemove}
-            className={"rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-600" + (onEdit ? "" : " ml-auto sm:ml-0")}
+            className="ml-auto rounded p-1 text-slate-300 hover:bg-red-50 hover:text-red-600 sm:ml-0"
             aria-label={`Remove ${label} from the form`}
           >
             <IconX size={14} />
@@ -234,22 +229,16 @@ export function IssueForm({
   initial,
   categories,
   allTags,
-  customFields = [],
   fieldConfig: initialFieldConfig = DEFAULT_FIELD_CONFIG,
 }: {
   initial?: IssueFormInitial;
   categories: { id: string; name: string }[];
   allTags: TagOption[];
-  /** All non-archived custom field definitions (data-driven — see
-   *  lib/customFields.ts). IssueForm owns adding/editing/removing them
-   *  inline via the "+ Add Custom Field" flow below. */
-  customFields?: CustomFieldDef[];
-  /** Saved layout (order + enabled state) for the fields below, built-in
-   *  and custom alike. Dragging/adding/removing a field here immediately
-   *  re-saves this same shared config via PUT /api/issue-form-config, so it
-   *  also becomes the default for every future issue. Falls back to the
-   *  built-in default layout if not provided (e.g. before the config
-   *  migration is applied). */
+  /** Saved layout (order + enabled state) for the built-in fields below.
+   *  Dragging/adding/removing a field here immediately re-saves this same
+   *  shared config via PUT /api/issue-form-config, so it also becomes the
+   *  default for every future issue. Falls back to the built-in default
+   *  layout if not provided (e.g. before the config migration is applied). */
   fieldConfig?: FieldConfigEntry[];
 }) {
   const router = useRouter();
@@ -260,51 +249,56 @@ export function IssueForm({
   const [selectedTagIds, setSelectedTagIds] = useState<Set<string>>(
     () => new Set((initial?.tags ?? []).map((t) => t.id)),
   );
+  // Local, addition-only copies of the server-provided lists so a category/
+  // tag created inline (see addCategory/addTag below) shows up immediately
+  // without a full page refetch — the canonical lists still live server-side.
+  const [categoryList, setCategoryList] = useState(categories);
+  const [tagList, setTagList] = useState(allTags);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [tagSaving, setTagSaving] = useState(false);
+  const [tagError, setTagError] = useState<string | null>(null);
   const [attachments, setAttachments] = useState<DraftAttachment[]>(() =>
     (initial?.attachments ?? []).map(toDraftAttachment),
   );
   const [sections, setSections] = useState<DraftSection[]>(() =>
     (initial?.sections ?? []).map(toDraftSection),
   );
-  const [fieldConfig, setFieldConfigState] = useState<FieldConfigEntry[]>(initialFieldConfig);
+  const [fieldConfig, setFieldConfigState] =
+    useState<FieldConfigEntry[]>(initialFieldConfig);
   const [layoutSaving, setLayoutSaving] = useState(false);
-  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>(customFields);
-  const [customValues, setCustomValues] = useState<Record<string, string>>(() =>
-    Object.fromEntries((initial?.customFields ?? []).map((v) => [v.fieldId, v.value ?? ""])),
-  );
-  const [fieldModal, setFieldModal] = useState<"new" | CustomFieldDef | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const isEdit = Boolean(initial?.id);
-  const customFieldById = useMemo(
-    () => new Map(customFieldDefs.map((f) => [f.id, f])),
-    [customFieldDefs],
-  );
-  const rawFieldOrder = useMemo(() => enabledFieldOrder(fieldConfig), [fieldConfig]);
-  // Drop any custom:<id> layout entry whose field no longer exists (e.g. it
-  // was deleted from another session) so the form never renders a blank row.
   const fieldOrder = useMemo(
-    () =>
-      rawFieldOrder.filter((k) => (isCustomFieldKey(k) ? customFieldById.has(customFieldIdFromKey(k)!) : true)),
-    [rawFieldOrder, customFieldById],
+    () => enabledFieldOrder(fieldConfig),
+    [fieldConfig],
   );
-  const disabledBuiltIns = useMemo(() => fieldConfig.filter((f) => !f.enabled && isFieldKey(f.key)), [fieldConfig]);
-  const unusedCustomFields = useMemo(() => {
-    const active = new Set(fieldOrder.filter(isCustomFieldKey).map((k) => customFieldIdFromKey(k)!));
-    return customFieldDefs.filter((f) => !active.has(f.id));
-  }, [fieldOrder, customFieldDefs]);
+  const disabledBuiltIns = useMemo(
+    () => fieldConfig.filter((f) => !f.enabled),
+    [fieldConfig],
+  );
   const tagsEnabled = fieldOrder.includes("tags");
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 6 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 150, tolerance: 6 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
   );
 
   const uploadingCount = useMemo(() => {
     const inSections = sections.reduce(
-      (n, s) => n + s.attachments.filter((a) => a.status === "uploading").length,
+      (n, s) =>
+        n + s.attachments.filter((a) => a.status === "uploading").length,
       0,
     );
     return (
@@ -319,6 +313,74 @@ export function IssueForm({
       else next.add(id);
       return next;
     });
+  }
+
+  // Plain handlers, not <form onSubmit>, on purpose — this widget is nested
+  // inside the page's single outer issue <form>, and a nested <form> would
+  // have its submit event bubble up and also trigger the outer submit.
+  async function addCategory() {
+    const name = newCategoryName.trim();
+    if (!name) {
+      setCategoryError("Enter a category name.");
+      return;
+    }
+    if (categoryList.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
+      setCategoryError("That category already exists.");
+      return;
+    }
+    setCategorySaving(true);
+    setCategoryError(null);
+    try {
+      const res = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to add category");
+      setCategoryList((prev) =>
+        [...prev, data as { id: string; name: string }].sort((a, b) => a.name.localeCompare(b.name)),
+      );
+      setCategoryId(data.id);
+      setNewCategoryName("");
+      setAddingCategory(false);
+    } catch (err) {
+      setCategoryError(err instanceof Error ? err.message : "Failed to add category");
+    } finally {
+      setCategorySaving(false);
+    }
+  }
+
+  async function addTag() {
+    const name = newTagName.trim();
+    if (!name) {
+      setTagError("Enter a tag name.");
+      return;
+    }
+    if (tagList.some((t) => t.name.toLowerCase() === name.toLowerCase())) {
+      setTagError("That tag already exists.");
+      return;
+    }
+    setTagSaving(true);
+    setTagError(null);
+    try {
+      const res = await fetch("/api/tags", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? "Failed to add tag");
+      const created = data as TagOption;
+      setTagList((prev) => [...prev, created].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedTagIds((prev) => new Set(prev).add(created.id));
+      setNewTagName("");
+      setAddingTag(false);
+    } catch (err) {
+      setTagError(err instanceof Error ? err.message : "Failed to add tag");
+    } finally {
+      setTagSaving(false);
+    }
   }
 
   function attachmentsOf(kind: AttachmentKind): DraftAttachment[] {
@@ -349,29 +411,13 @@ export function IssueForm({
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
-    persistFieldConfig(reorderEnabledFields(fieldConfig, active.id as LayoutKey, over.id as LayoutKey));
-  }
-
-  function handleFieldSaved(field: CustomFieldDef) {
-    const wasNew = fieldModal === "new";
-    setCustomFieldDefs((prev) =>
-      prev.some((f) => f.id === field.id) ? prev.map((f) => (f.id === field.id ? field : f)) : [...prev, field],
+    persistFieldConfig(
+      reorderEnabledFields(
+        fieldConfig,
+        active.id as LayoutKey,
+        over.id as LayoutKey,
+      ),
     );
-    if (wasNew) {
-      persistFieldConfig(addNewFieldEnabled(fieldConfig, customFieldLayoutKey(field.id)));
-    }
-    setFieldModal(null);
-  }
-
-  function handleFieldDeleted(fieldId: string) {
-    setCustomFieldDefs((prev) => prev.filter((f) => f.id !== fieldId));
-    persistFieldConfig(removeFieldEntry(fieldConfig, customFieldLayoutKey(fieldId)));
-    setCustomValues((prev) => {
-      const next = { ...prev };
-      delete next[fieldId];
-      return next;
-    });
-    setFieldModal(null);
   }
 
   async function submit(e: React.FormEvent) {
@@ -379,14 +425,6 @@ export function IssueForm({
     if (tagsEnabled && selectedTagIds.size === 0) {
       setError("Please select at least one tag.");
       return;
-    }
-    for (const key of fieldOrder) {
-      if (!isCustomFieldKey(key)) continue;
-      const field = customFieldById.get(customFieldIdFromKey(key)!);
-      if (field?.required && !(customValues[field.id] ?? "").trim()) {
-        setError(`${field.label} is required.`);
-        return;
-      }
     }
     if (uploadingCount > 0) {
       setError("Please wait for all files to finish uploading.");
@@ -406,15 +444,13 @@ export function IssueForm({
           .map(toAttachmentPayload),
         sections: sections.map((s) => ({
           id: s.id,
+          type: s.type,
           title: s.title,
           content: s.content,
           attachments: s.attachments
             .filter((a) => a.status === "ready" && a.storagePath)
             .map(toAttachmentPayload),
         })),
-        customFieldValues: Object.entries(customValues)
-          .filter(([fieldId]) => customFieldById.has(fieldId))
-          .map(([fieldId, value]) => ({ fieldId, value: value || null })),
       };
       const url = isEdit ? `/api/issues/${initial!.id}` : "/api/issues";
       const method = isEdit ? "PUT" : "POST";
@@ -494,12 +530,71 @@ export function IssueForm({
           onChange={(e) => setCategoryId(e.target.value)}
         >
           <option value="">— None —</option>
-          {categories.map((c) => (
+          {categoryList.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
             </option>
           ))}
         </select>
+
+        {addingCategory ? (
+          <div className="mt-2 flex flex-wrap items-start gap-1.5">
+            <div className="flex-1">
+              <input
+                autoFocus
+                className="input"
+                placeholder="New category name"
+                maxLength={80}
+                value={newCategoryName}
+                onChange={(e) => {
+                  setNewCategoryName(e.target.value);
+                  if (categoryError) setCategoryError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addCategory();
+                  } else if (e.key === "Escape") {
+                    setAddingCategory(false);
+                    setNewCategoryName("");
+                    setCategoryError(null);
+                  }
+                }}
+              />
+              {categoryError && <p className="mt-1 text-xs text-red-700">{categoryError}</p>}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={categorySaving}
+              onClick={() => addCategory()}
+            >
+              {categorySaving ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setAddingCategory(false);
+                setNewCategoryName("");
+                setCategoryError(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500">
+            <span>Can&apos;t find what you need?</span>
+            <button
+              type="button"
+              onClick={() => setAddingCategory(true)}
+              className="font-medium text-accent hover:underline"
+            >
+              <IconPlus size={11} className="mr-0.5 inline align-text-top" /> Add Category
+            </button>
+          </div>
+        )}
       </div>
     ),
     tags: () => (
@@ -510,13 +605,11 @@ export function IssueForm({
             {selectedTagIds.size} selected
           </span>
         </div>
-        {allTags.length === 0 ? (
-          <p className="text-sm text-slate-500">
-            No tags yet. Create some in the Tags page first.
-          </p>
+        {tagList.length === 0 ? (
+          <p className="text-sm text-slate-500">No tags yet — add one below.</p>
         ) : (
           <div className="flex max-h-[90px] flex-wrap gap-2 overflow-y-auto rounded-md border border-slate-200 p-3">
-            {allTags.map((t) => {
+            {tagList.map((t) => {
               const active = selectedTagIds.has(t.id);
               return (
                 <button
@@ -536,6 +629,62 @@ export function IssueForm({
               );
             })}
           </div>
+        )}
+
+        {addingTag ? (
+          <div className="mt-2 flex flex-wrap items-start gap-1.5">
+            <div className="flex-1">
+              <input
+                autoFocus
+                className="input"
+                placeholder="New tag name"
+                maxLength={40}
+                value={newTagName}
+                onChange={(e) => {
+                  setNewTagName(e.target.value);
+                  if (tagError) setTagError(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    addTag();
+                  } else if (e.key === "Escape") {
+                    setAddingTag(false);
+                    setNewTagName("");
+                    setTagError(null);
+                  }
+                }}
+              />
+              {tagError && <p className="mt-1 text-xs text-red-700">{tagError}</p>}
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary btn-sm"
+              disabled={tagSaving}
+              onClick={() => addTag()}
+            >
+              {tagSaving ? "Saving…" : "Save"}
+            </button>
+            <button
+              type="button"
+              className="btn btn-sm"
+              onClick={() => {
+                setAddingTag(false);
+                setNewTagName("");
+                setTagError(null);
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddingTag(true)}
+            className="mt-1.5 text-xs font-medium text-accent hover:underline"
+          >
+            <IconPlus size={11} className="mr-0.5 inline align-text-top" /> Add Tag
+          </button>
         )}
       </div>
     ),
@@ -591,100 +740,78 @@ export function IssueForm({
   };
 
   function renderField(key: LayoutKey): React.ReactNode {
-    if (isCustomFieldKey(key)) {
-      const field = customFieldById.get(customFieldIdFromKey(key)!);
-      if (!field) return null;
-      return (
-        <div>
-          <label className="label" htmlFor={`custom-field-${field.id}`}>
-            {field.label}
-          </label>
-          <CustomFieldInput
-            field={field}
-            value={customValues[field.id] ?? ""}
-            onChange={(v) => setCustomValues((prev) => ({ ...prev, [field.id]: v }))}
-          />
-          {field.description && <p className="mt-1 text-xs text-slate-500">{field.description}</p>}
-        </div>
-      );
-    }
-    return isFieldKey(key) ? fieldRenderers[key]?.() : null;
+    return fieldRenderers[key]?.();
   }
 
   return (
     <form onSubmit={submit} className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-xs text-slate-400">
-          Drag <IconGripVertical size={12} className="inline align-text-top" /> to reorder fields —
-          changes apply to every future issue too.
+          Drag <IconGripVertical size={12} className="inline align-text-top" />{" "}
+          to reorder fields — changes apply to every future issue too.
         </p>
-        {layoutSaving && <span className="text-xs text-slate-400">Saving layout…</span>}
+        {layoutSaving && (
+          <span className="text-xs text-slate-400">Saving layout…</span>
+        )}
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={fieldOrder} strategy={verticalListSortingStrategy}>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={handleDragEnd}
+      >
+        <SortableContext
+          items={fieldOrder}
+          strategy={verticalListSortingStrategy}
+        >
           <div className="space-y-5">
-            {fieldOrder.map((key, i) => {
-              const custom = isCustomFieldKey(key);
-              const customDef = custom ? customFieldById.get(customFieldIdFromKey(key)!) : undefined;
-              const label = custom ? (customDef?.label ?? "Custom field") : FIELD_REGISTRY[key as FieldKey].label;
-              return (
-                <SortableFieldBlock
-                  key={key}
-                  fieldKey={key}
-                  label={label}
-                  requiredBadge={custom ? !!customDef?.required : isRequiredField(key)}
-                  canMoveUp={i > 0}
-                  canMoveDown={i < fieldOrder.length - 1}
-                  onMoveUp={() => persistFieldConfig(moveEnabledField(fieldConfig, key, -1))}
-                  onMoveDown={() => persistFieldConfig(moveEnabledField(fieldConfig, key, 1))}
-                  onEdit={custom && customDef ? () => setFieldModal(customDef) : undefined}
-                  onRemove={
-                    !custom && isRequiredField(key)
-                      ? null
-                      : () => persistFieldConfig(setFieldEnabled(fieldConfig, key, false))
-                  }
-                >
-                  {renderField(key)}
-                </SortableFieldBlock>
-              );
-            })}
+            {fieldOrder.map((key, i) => (
+              <SortableFieldBlock
+                key={key}
+                fieldKey={key}
+                label={FIELD_REGISTRY[key].label}
+                requiredBadge={isRequiredField(key)}
+                canMoveUp={i > 0}
+                canMoveDown={i < fieldOrder.length - 1}
+                onMoveUp={() =>
+                  persistFieldConfig(moveEnabledField(fieldConfig, key, -1))
+                }
+                onMoveDown={() =>
+                  persistFieldConfig(moveEnabledField(fieldConfig, key, 1))
+                }
+                onRemove={
+                  isRequiredField(key)
+                    ? null
+                    : () =>
+                        persistFieldConfig(
+                          setFieldEnabled(fieldConfig, key, false),
+                        )
+                }
+              >
+                {renderField(key)}
+              </SortableFieldBlock>
+            ))}
           </div>
         </SortableContext>
       </DndContext>
 
-      <div className="flex flex-wrap items-center gap-2">
-        {(disabledBuiltIns.length > 0 || unusedCustomFields.length > 0) && (
+      {disabledBuiltIns.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs text-slate-500">Add field:</span>
-        )}
-        {disabledBuiltIns.map((f) => (
-          <button
-            key={f.key}
-            type="button"
-            onClick={() => persistFieldConfig(setFieldEnabled(fieldConfig, f.key, true))}
-            className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-400 hover:bg-slate-50"
-          >
-            + {FIELD_REGISTRY[f.key as FieldKey].label}
-          </button>
-        ))}
-        {unusedCustomFields.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => persistFieldConfig(addNewFieldEnabled(fieldConfig, customFieldLayoutKey(f.id)))}
-            className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-400 hover:bg-slate-50"
-          >
-            + {f.label}
-          </button>
-        ))}
-        <button
-          type="button"
-          onClick={() => setFieldModal("new")}
-          className="rounded-full border border-dashed border-accent px-2.5 py-1 text-xs font-medium text-accent hover:bg-accent/5"
-        >
-          <IconPlus size={12} className="mr-1 inline" /> Add Custom Field
-        </button>
-      </div>
+          {disabledBuiltIns.map((f) => (
+            <button
+              key={f.key}
+              type="button"
+              onClick={() =>
+                persistFieldConfig(setFieldEnabled(fieldConfig, f.key, true))
+              }
+              className="rounded-full border border-dashed border-slate-300 px-2.5 py-1 text-xs text-slate-600 hover:border-slate-400 hover:bg-slate-50"
+            >
+              + {FIELD_REGISTRY[f.key].label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="border-t border-slate-200 pt-5">
         <SectionsList sections={sections} onChange={setSections} />
@@ -704,15 +831,6 @@ export function IssueForm({
           Cancel
         </button>
       </div>
-
-      {fieldModal && (
-        <CustomFieldModal
-          initial={fieldModal === "new" ? undefined : fieldModal}
-          onClose={() => setFieldModal(null)}
-          onSaved={handleFieldSaved}
-          onDeleted={fieldModal !== "new" ? handleFieldDeleted : undefined}
-        />
-      )}
     </form>
   );
 }

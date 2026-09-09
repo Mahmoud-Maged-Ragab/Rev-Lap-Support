@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useTranslations } from "next-intl";
 
@@ -79,6 +80,21 @@ export default function LoginPage() {
             {loading ? t("signingIn") : t("signIn")}
           </button>
         </form>
+
+        <p className="mt-4 text-center text-xs text-slate-500">
+          {t.rich("consent", {
+            terms: (chunks) => (
+              <Link href="/terms" className="text-accent hover:underline">
+                {chunks}
+              </Link>
+            ),
+            privacy: (chunks) => (
+              <Link href="/privacy" className="text-accent hover:underline">
+                {chunks}
+              </Link>
+            ),
+          })}
+        </p>
       </div>
     </div>
   );

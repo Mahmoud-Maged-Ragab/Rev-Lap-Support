@@ -5,7 +5,6 @@ import { computeIssueChanges, logIssueHistory } from "@/lib/history";
 import { auditLog, type AuditAction } from "@/lib/audit";
 import { selectAll } from "@/lib/supabase";
 import { IssueInputSchema } from "@/lib/validation";
-import { listCustomFields, validateCustomFieldValues } from "@/lib/customFields";
 
 export async function GET(_req: Request, { params }: { params: { id: string } }) {
   const issue = await getIssueById(params.id);
@@ -56,15 +55,6 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   }
   const existing = await getIssueById(params.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
-
-  const customFieldDefs = await listCustomFields();
-  const customFieldErrors = validateCustomFieldValues(customFieldDefs, parsed.data.customFieldValues);
-  if (customFieldErrors.length > 0) {
-    return NextResponse.json(
-      { error: customFieldErrors[0].message, details: customFieldErrors },
-      { status: 400 },
-    );
-  }
 
   const updated = await updateIssue(params.id, parsed.data);
 

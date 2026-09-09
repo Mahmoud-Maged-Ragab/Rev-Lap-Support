@@ -4,7 +4,6 @@ import { createIssue, listIssues } from "@/lib/issues";
 import { logIssueHistory } from "@/lib/history";
 import { auditLog } from "@/lib/audit";
 import { IssueInputSchema } from "@/lib/validation";
-import { listCustomFields, validateCustomFieldValues } from "@/lib/customFields";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
@@ -55,15 +54,6 @@ export async function POST(req: Request) {
   const parsed = IssueInputSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
-  }
-
-  const customFieldDefs = await listCustomFields();
-  const customFieldErrors = validateCustomFieldValues(customFieldDefs, parsed.data.customFieldValues);
-  if (customFieldErrors.length > 0) {
-    return NextResponse.json(
-      { error: customFieldErrors[0].message, details: customFieldErrors },
-      { status: 400 },
-    );
   }
 
   const issue = await createIssue(parsed.data, session.sub);

@@ -25,27 +25,9 @@ export const FIELD_KEYS = [
 
 export type FieldKey = (typeof FIELD_KEYS)[number];
 
-/**
- * A layout entry's `key` is either a built-in `FieldKey` or a custom
- * field's storage key, `custom:<issue_custom_fields.id>` — custom fields
- * are fully data-driven (see `src/lib/customFields.ts`), so the layout
- * can't restrict this to the static `FieldKey` union the way it used to.
- */
-export type LayoutKey = string;
-
-export const CUSTOM_FIELD_PREFIX = "custom:";
-
-export function customFieldLayoutKey(customFieldId: string): LayoutKey {
-  return `${CUSTOM_FIELD_PREFIX}${customFieldId}`;
-}
-
-export function isCustomFieldKey(key: LayoutKey): boolean {
-  return key.startsWith(CUSTOM_FIELD_PREFIX);
-}
-
-export function customFieldIdFromKey(key: LayoutKey): string | null {
-  return isCustomFieldKey(key) ? key.slice(CUSTOM_FIELD_PREFIX.length) : null;
-}
+/** A layout entry's key is always a built-in `FieldKey` — every field on
+ *  the Issue Creation form is now one of these. */
+export type LayoutKey = FieldKey;
 
 export type FieldConfigEntry = {
   key: LayoutKey;
@@ -73,10 +55,7 @@ export function isFieldKey(v: unknown): v is FieldKey {
 
 /**
  * Whether a layout entry can never be disabled/removed from the form. Only
- * true for the two backend-required built-ins (title, description) — a
- * *custom* field's own `required` flag only governs validation while it's
- * enabled, it never blocks removing the field from the layout entirely
- * (see `src/lib/customFields.ts`).
+ * true for the two backend-required built-ins (title, description).
  */
 export function isRequiredField(key: LayoutKey): boolean {
   return isFieldKey(key) && FIELD_REGISTRY[key].required;
@@ -113,10 +92,7 @@ export function reconcileFieldConfig(
   for (const entry of saved) {
     const key = entry?.key;
     if (typeof key !== "string" || seen.has(key)) continue;
-    // Keep any built-in key plus any custom:<id> key — custom field
-    // existence/archival is validated against the DB at a higher layer
-    // (IssueForm just skips rendering a stale custom key), not here.
-    if (!isFieldKey(key) && !isCustomFieldKey(key)) continue;
+    if (!isFieldKey(key)) continue;
     seen.add(key);
     out.push({
       key,
@@ -192,14 +168,4 @@ export function setFieldEnabled(
   }
   if (!entries.find((e) => e.key === key)) return entries;
   return [...rest, { ...target, enabled: false }];
-}
-
-/** Insert a brand-new custom field's layout entry at the end of the enabled block (used right after creating one). */
-export function addNewFieldEnabled(entries: FieldConfigEntry[], key: LayoutKey): FieldConfigEntry[] {
-  return setFieldEnabled(entries, key, true);
-}
-
-/** Drop a layout entry entirely (used when a custom field is archived/deleted). */
-export function removeFieldEntry(entries: FieldConfigEntry[], key: LayoutKey): FieldConfigEntry[] {
-  return entries.filter((e) => e.key !== key);
 }
