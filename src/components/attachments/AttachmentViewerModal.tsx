@@ -2,14 +2,17 @@
 
 import { useEffect, useState } from "react";
 import { IconDownload, IconX } from "@tabler/icons-react";
+import { driveEmbedUrl, driveThumbnailUrl, parseGoogleDriveUrl } from "@/lib/googleDrive";
 import { PdfViewer } from "./PdfViewer";
-import { isDocx, type AttachmentKind } from "./types";
+import { isDocx, type AttachmentKind, type AttachmentSource } from "./types";
 
 export type ViewerTarget = {
   kind: AttachmentKind;
   filename: string;
   mime: string;
   url: string | null;
+  source?: AttachmentSource;
+  externalUrl?: string | null;
   /** For .docx text extraction: either the saved attachment's id (view page)
    *  or its raw storage path (form, before the issue is saved). */
   attachmentId?: string | null;
@@ -64,15 +67,27 @@ export function AttachmentViewerModal({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1.5">
-            {target.url && (
+            {target.source === "drive" && target.url ? (
               <a
                 href={target.url}
-                download={target.filename}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="btn btn-outline btn-sm"
-                aria-label="Download"
+                aria-label="Open in Google Drive"
               >
-                <IconDownload size={16} />
+                Open in Drive
               </a>
+            ) : (
+              target.url && (
+                <a
+                  href={target.url}
+                  download={target.filename}
+                  className="btn btn-outline btn-sm"
+                  aria-label="Download"
+                >
+                  <IconDownload size={16} />
+                </a>
+              )
             )}
             <button
               type="button"
@@ -98,6 +113,39 @@ export function AttachmentViewerModal({
 }
 
 function ViewerBody({ target }: { target: ViewerTarget }) {
+  if (target.source === "drive") {
+    const fileId = target.url ? parseGoogleDriveUrl(target.url)?.id : undefined;
+    if (!fileId) {
+      return (
+        <div className="flex h-full min-h-[50vh] items-center justify-center">
+          <UnavailableNotice />
+        </div>
+      );
+    }
+    if (target.kind === "image") {
+      return (
+        <div className="flex h-full min-h-[50vh] items-center justify-center p-4">
+          <DriveImage fileId={fileId} alt={target.caption ?? target.filename} />
+        </div>
+      );
+    }
+    // video / pdf / document: Google's own embeddable preview iframe — the
+    // share URL isn't a raw stream/file, so an iframe pointed at Drive's
+    // preview endpoint is the only mechanism that actually plays/renders it
+    // (this also covers DOC/DOCX and native Google Docs — Drive's /preview
+    // endpoint renders those the same way).
+    return (
+      <div className="flex h-full min-h-[50vh] items-center justify-center p-2 sm:p-4">
+        <iframe
+          src={driveEmbedUrl(fileId)}
+          className="h-full max-h-full w-full max-w-full rounded border-0"
+          allow="autoplay"
+          title={target.filename}
+        />
+      </div>
+    );
+  }
+
   if (target.kind === "image") {
     return (
       <div className="flex h-full min-h-[50vh] items-center justify-center p-4">
@@ -176,6 +224,29 @@ function UnavailableNotice() {
     <p className="text-sm text-slate-500">
       This attachment link has expired. Reload the page and try again.
     </p>
+  );
+}
+
+/** A Drive-hosted image can 404/interstitial for a viewer without access —
+ *  fall back to a clear message rather than a broken-image icon. */
+function DriveImage({ fileId, alt }: { fileId: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <p className="max-w-sm text-center text-sm text-slate-500">
+        This image couldn&apos;t be loaded from Google Drive. The file may be
+        private — ask the owner to share it with &quot;Anyone with the link&quot;.
+      </p>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={driveThumbnailUrl(fileId)}
+      alt={alt}
+      className="max-h-full max-w-full rounded object-contain"
+      onError={() => setFailed(true)}
+    />
   );
 }
 

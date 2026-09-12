@@ -1,27 +1,48 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 //import { IconSearch } from "@tabler/icons-react";
+
+const SEARCH_DEBOUNCE_MS = 400;
 
 export function SearchBar({ size = "lg" }: { size?: "lg" | "sm" }) {
   const router = useRouter();
   const params = useSearchParams();
   const t = useTranslations("search");
   const [q, setQ] = useState(params.get("q") ?? "");
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     setQ(params.get("q") ?? "");
   }, [params]);
 
-  function submit(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  function pushQuery(value: string) {
     const next = new URLSearchParams(params.toString());
-    if (q.trim()) next.set("q", q.trim());
+    if (value.trim()) next.set("q", value.trim());
     else next.delete("q");
     next.delete("page");
     router.push(`/?${next.toString()}`);
+  }
+
+  function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const value = e.target.value;
+    setQ(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => pushQuery(value), SEARCH_DEBOUNCE_MS);
+  }
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    pushQuery(q);
   }
 
   return (
@@ -35,7 +56,7 @@ export function SearchBar({ size = "lg" }: { size?: "lg" | "sm" }) {
 
           <input
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={handleChange}
             placeholder={t("placeholder")}
             className={`w-full rounded-md border border-slate-200 bg-white py-2 ps-10 pe-10 text-sm text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 ${
               size === "lg" ? "h-12 text-[15px]" : "h-9"

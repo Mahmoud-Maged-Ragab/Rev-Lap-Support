@@ -33,6 +33,8 @@ import type {
 import { AttachmentUploader } from "@/components/attachments/AttachmentUploader";
 import { VideoAttachmentField } from "@/components/issue-form/VideoAttachmentField";
 import { SectionsList } from "@/components/issue-form/SectionsList";
+import { MultiSelectDropdown } from "@/components/ui/MultiSelectDropdown";
+import { driveThumbnailUrl, parseGoogleDriveUrl } from "@/lib/googleDrive";
 import type { DraftSection } from "@/components/issue-form/types";
 import { SECTION_ELEMENTS, type SectionElementType } from "@/lib/sectionElements";
 import {
@@ -51,8 +53,10 @@ import {
 type InitialAttachment = {
   id: string;
   kind: AttachmentKind;
+  source?: "upload" | "drive";
   url: string | null;
-  storagePath: string;
+  storagePath: string | null;
+  externalUrl?: string | null;
   filename: string;
   mime: string;
   sizeBytes: number;
@@ -81,16 +85,20 @@ export type IssueFormInitial = {
 type TagOption = { id: string; name: string };
 
 function toDraftAttachment(a: InitialAttachment): DraftAttachment {
+  const isDrive = a.source === "drive";
+  const driveId = isDrive && a.url ? parseGoogleDriveUrl(a.url)?.id : undefined;
   return {
     clientId: a.id,
     id: a.id,
     kind: a.kind,
+    source: a.source ?? "upload",
     filename: a.filename,
     mime: a.mime,
     sizeBytes: a.sizeBytes,
     caption: a.caption ?? "",
     storagePath: a.storagePath,
-    previewUrl: a.url ?? "",
+    externalUrl: a.externalUrl ?? null,
+    previewUrl: isDrive && a.kind === "image" && driveId ? driveThumbnailUrl(driveId) : a.url ?? "",
     status: "ready",
   };
 }
@@ -114,11 +122,17 @@ function toDraftSection(s: InitialSection): DraftSection {
   };
 }
 
+function isSaveableAttachment(a: DraftAttachment): boolean {
+  return a.status === "ready" && (a.source === "drive" ? !!a.externalUrl : !!a.storagePath);
+}
+
 function toAttachmentPayload(a: DraftAttachment) {
   return {
     id: a.id,
     kind: a.kind,
-    storagePath: a.storagePath as string,
+    source: a.source ?? "upload",
+    storagePath: a.storagePath,
+    externalUrl: a.externalUrl ?? null,
     filename: a.filename,
     mime: a.mime,
     sizeBytes: a.sizeBytes,
@@ -306,15 +320,6 @@ export function IssueForm({
     );
   }, [attachments, sections]);
 
-  function toggleTag(id: string) {
-    setSelectedTagIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
   // Plain handlers, not <form onSubmit>, on purpose — this widget is nested
   // inside the page's single outer issue <form>, and a nested <form> would
   // have its submit event bubble up and also trigger the outer submit.
@@ -439,17 +444,13 @@ export function IssueForm({
         description,
         categoryId: categoryId || null,
         tagIds: Array.from(selectedTagIds),
-        attachments: attachments
-          .filter((a) => a.status === "ready" && a.storagePath)
-          .map(toAttachmentPayload),
+        attachments: attachments.filter(isSaveableAttachment).map(toAttachmentPayload),
         sections: sections.map((s) => ({
           id: s.id,
           type: s.type,
           title: s.title,
           content: s.content,
-          attachments: s.attachments
-            .filter((a) => a.status === "ready" && a.storagePath)
-            .map(toAttachmentPayload),
+          attachments: s.attachments.filter(isSaveableAttachment).map(toAttachmentPayload),
         })),
       };
       const url = isEdit ? `/api/issues/${initial!.id}` : "/api/issues";
@@ -608,27 +609,14 @@ export function IssueForm({
         {tagList.length === 0 ? (
           <p className="text-sm text-slate-500">No tags yet — add one below.</p>
         ) : (
-          <div className="flex max-h-[90px] flex-wrap gap-2 overflow-y-auto rounded-md border border-slate-200 p-3">
-            {tagList.map((t) => {
-              const active = selectedTagIds.has(t.id);
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => toggleTag(t.id)}
-                  aria-pressed={active}
-                  className={
-                    "rounded-full border px-3 py-1 text-xs font-medium transition " +
-                    (active
-                      ? "border-accent bg-accent text-white"
-                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50")
-                  }
-                >
-                  {t.name}
-                </button>
-              );
-            })}
-          </div>
+          <MultiSelectDropdown
+            options={tagList.map((t) => ({ id: t.id, label: t.name }))}
+            selectedIds={selectedTagIds}
+            onChange={setSelectedTagIds}
+            placeholder="Select tags…"
+            searchPlaceholder="Search tags…"
+            emptyText="No tags found."
+          />
         )}
 
         {addingTag ? (

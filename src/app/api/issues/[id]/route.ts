@@ -56,7 +56,13 @@ export async function PUT(req: Request, { params }: { params: { id: string } }) 
   const existing = await getIssueById(params.id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const updated = await updateIssue(params.id, parsed.data);
+  let updated: { id: string; slug: string };
+  try {
+    updated = await updateIssue(params.id, parsed.data);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to update issue";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
 
   const maps = await nameMaps({
     categoryIds: [existing.categoryId, parsed.data.categoryId],

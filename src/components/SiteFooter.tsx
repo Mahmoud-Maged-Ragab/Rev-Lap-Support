@@ -25,7 +25,7 @@ export function SiteFooter() {
 
   return (
     <footer className="border-t border-slate-200 bg-slate-50">
-      <div className="mx-auto max-w-6xl px-4 py-10 sm:py-12">
+      <div className="w-full px-5 py-10 sm:px-6 sm:py-12 lg:px-12 xl:px-20 2xl:px-32">
         <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-4">
           <div className="col-span-2 sm:col-span-1">
             <Link href="/" className="flex items-center gap-2 font-semibold tracking-tight">

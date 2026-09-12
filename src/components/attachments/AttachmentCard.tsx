@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  IconBrandGoogleDrive,
   IconCheck,
   IconEye,
   IconFile,
@@ -59,9 +60,17 @@ export function AttachmentCard({
             src={a.previewUrl}
             alt=""
             className="h-full w-full object-cover"
+            onError={(e) => {
+              (e.target as HTMLImageElement).style.visibility = "hidden";
+            }}
           />
-        ) : a.kind === "video" ? (
+        ) : a.kind === "video" && a.source !== "drive" ? (
           <video src={a.previewUrl} className="h-full w-full object-cover" muted />
+        ) : a.source === "drive" ? (
+          <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
+            <IconBrandGoogleDrive size={20} />
+            <span className="text-[10px] font-medium">Google Drive</span>
+          </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-slate-400">
             <KindIcon mime={a.mime} filename={a.filename} kind={a.kind} />
@@ -106,13 +115,15 @@ export function AttachmentCard({
       </div>
 
       <div className="flex items-center justify-between gap-2 px-2.5 pb-1">
-        <span className="text-[11px] text-slate-400">{formatBytes(a.sizeBytes)}</span>
+        <span className="text-[11px] text-slate-400">
+          {a.source === "drive" ? "Google Drive" : formatBytes(a.sizeBytes)}
+        </span>
         {a.status === "uploading" && (
           <span className="text-[11px] text-slate-500">Uploading… {a.progress ?? 0}%</span>
         )}
         {a.status === "ready" && (
           <span className="flex items-center gap-0.5 text-[11px] font-medium text-emerald-600">
-            <IconCheck size={12} /> Uploaded
+            <IconCheck size={12} /> {a.source === "drive" ? "Linked" : "Uploaded"}
           </span>
         )}
         {a.status === "error" && (

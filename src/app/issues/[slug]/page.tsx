@@ -141,7 +141,7 @@ export default async function IssuePage({
   const visibleSections = issue.sections.filter(isSectionVisible);
 
   return (
-    <article className="grid grid-cols-1 gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
+    <article className="mx-auto grid max-w-7xl grid-cols-1 gap-6 lg:grid-cols-[1fr_240px] lg:gap-8">
       <div className="min-w-0 space-y-6">
         <nav className="text-xs text-slate-500">
           <Link href="/" className="hover:text-ink-900">
@@ -305,7 +305,7 @@ export default async function IssuePage({
             {issue.tags.map((t) => (
               <Link
                 key={t.id}
-                href={`/?tag=${t.id}`}
+                href={`/?tags=${t.id}`}
                 className="chip hover:bg-slate-200"
               >
                 {t.name}

@@ -25,7 +25,7 @@ export default async function EditIssuePage({
   if (!issue) notFound();
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-[1400px] space-y-5">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Edit issue</h1>
         <p className="text-sm text-slate-500">/{issue.slug}</p>

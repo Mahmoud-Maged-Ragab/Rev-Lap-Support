@@ -61,7 +61,10 @@
     "allCategories": "All categories",
     "tags": "Tags",
     "allTags": "All tags",
-    "clear": "clear ×"
+    "searchTags": "Search tags…",
+    "noTagsFound": "No tags found.",
+    "clear": "clear ×",
+    "clearAll": "Clear filters ×"
   },
   "issueList": {
     "empty": "No issues match your filters.",

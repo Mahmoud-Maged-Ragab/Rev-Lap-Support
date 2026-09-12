@@ -18,7 +18,7 @@ export default async function CategoriesPage() {
     order: "name.asc",
   });
   return (
-    <div className="max-w-2xl space-y-5">
+    <div className="space-y-5">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">Categories</h1>
         <p className="text-sm text-slate-500">Group related issues together.</p>

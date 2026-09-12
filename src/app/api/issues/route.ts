@@ -9,7 +9,11 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const q = url.searchParams.get("q") ?? undefined;
   const categoryId = url.searchParams.get("category") ?? undefined;
-  const tagId = url.searchParams.get("tag") ?? undefined;
+  // `tags` is the current comma-separated multi-tag param; `tag` is kept for
+  // backward compatibility with any existing single-tag callers/links.
+  const tagsParam =
+    url.searchParams.get("tags") ?? url.searchParams.get("tag") ?? undefined;
+  const tagIds = tagsParam ? tagsParam.split(",").filter(Boolean) : undefined;
   const sortParam = url.searchParams.get("sort");
   const sort =
     sortParam === "views" || sortParam === "oldest" || sortParam === "newest"
@@ -35,7 +39,7 @@ export async function GET(req: Request) {
     return NextResponse.json(ordered);
   }
 
-  const result = await listIssues({ q, categoryId, tagId, sort, page, pageSize });
+  const result = await listIssues({ q, categoryId, tagIds, sort, page, pageSize });
   return NextResponse.json(result);
 }
 
@@ -56,7 +60,14 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Validation failed", details: parsed.error.flatten() }, { status: 400 });
   }
 
-  const issue = await createIssue(parsed.data, session.sub);
+  let issue: { id: string; slug: string };
+  try {
+    issue = await createIssue(parsed.data, session.sub);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to create issue";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
   await Promise.all([
     logIssueHistory({
       issueId: issue.id,

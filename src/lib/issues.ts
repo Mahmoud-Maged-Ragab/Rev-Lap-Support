@@ -39,8 +39,10 @@ export type IssueListResult = {
 export type IssueAttachment = {
   id: string;
   kind: "image" | "video" | "pdf" | "document";
+  source: "upload" | "drive";
   url: string | null;
-  storagePath: string;
+  storagePath: string | null;
+  externalUrl: string | null;
   filename: string;
   mime: string;
   sizeBytes: number;
@@ -60,7 +62,8 @@ export type IssueSection = {
 export interface ListOptions {
   q?: string;
   categoryId?: string;
-  tagId?: string;
+  /** Issues must have every tag in this list (AND semantics). */
+  tagIds?: string[];
   sort?: "newest" | "oldest" | "views";
   page?: number;
   pageSize?: number;
@@ -122,13 +125,30 @@ async function relatedIssueIdsForSearch(
   return { categoryIds: cats.map((c) => c.id), issueIds };
 }
 
-/** Look up issue IDs that have a specific tagId (used by listIssues tag filter). */
-async function issueIdsForTag(tagId: string): Promise<string[]> {
-  const rows = await selectAll<{ issueId: string }>("issue_tags", {
-    select: "issueId",
-    filters: { tagId: `eq.${tagId}` },
-  });
-  return Array.from(new Set(rows.map((r) => r.issueId)));
+/**
+ * Look up issue IDs that carry every given tag (AND semantics — used by
+ * listIssues tag filter, including the single-tag case).
+ */
+async function issueIdsForTags(tagIds: string[]): Promise<string[]> {
+  const uniqueTagIds = Array.from(new Set(tagIds));
+  const rows = await selectAll<{ issueId: string; tagId: string }>(
+    "issue_tags",
+    {
+      select: "issueId,tagId",
+      filters: { tagId: `in.(${uniqueTagIds.join(",")})` },
+    },
+  );
+
+  const tagsByIssue = new Map<string, Set<string>>();
+  for (const r of rows) {
+    const set = tagsByIssue.get(r.issueId) ?? new Set<string>();
+    set.add(r.tagId);
+    tagsByIssue.set(r.issueId, set);
+  }
+
+  return Array.from(tagsByIssue.entries())
+    .filter(([, tagSet]) => uniqueTagIds.every((id) => tagSet.has(id)))
+    .map(([issueId]) => issueId);
 }
 
 export async function listIssues(
@@ -140,9 +160,9 @@ export async function listIssues(
 
   const filters: Record<string, string> = {};
 
-  // Tag filter: resolve to issue IDs first.
-  if (opts.tagId) {
-    const ids = await issueIdsForTag(opts.tagId);
+  // Tag filter: resolve to issue IDs first (issue must have ALL selected tags).
+  if (opts.tagIds && opts.tagIds.length > 0) {
+    const ids = await issueIdsForTags(opts.tagIds);
     if (ids.length === 0) return { items: [], total: 0 };
     filters["id"] = `in.(${ids.join(",")})`;
   }
@@ -253,7 +273,9 @@ type AttachmentRow = {
   issueId: string;
   sectionId: string | null;
   kind: "image" | "video" | "pdf" | "document";
-  storagePath: string;
+  source: "upload" | "drive";
+  storagePath: string | null;
+  externalUrl: string | null;
   filename: string;
   mime: string;
   sizeBytes: number;
@@ -266,6 +288,11 @@ const SECTION_SELECT = "id,issueId,type,title,content,position";
 // still load (as "legacy") if that column doesn't exist yet on this DB.
 const SECTION_SELECT_LEGACY = "id,issueId,title,content,position";
 const ATTACHMENT_SELECT =
+  "id,issueId,sectionId,kind,source,storagePath,externalUrl,filename,mime,sizeBytes,caption,position";
+// Pre-007-migration fallback — same shape minus `source`/`externalUrl`, so
+// existing (upload-only) attachments still load if those columns don't exist
+// yet on this DB (see supabase/sql/007_attachment_drive_source.sql).
+const ATTACHMENT_SELECT_LEGACY =
   "id,issueId,sectionId,kind,storagePath,filename,mime,sizeBytes,caption,position";
 
 async function selectSectionRows(issueId: string): Promise<SectionRow[]> {
@@ -286,26 +313,47 @@ async function selectSectionRows(issueId: string): Promise<SectionRow[]> {
   }
 }
 
+async function selectAttachmentRows(issueId: string): Promise<AttachmentRow[]> {
+  try {
+    return await selectAll<AttachmentRow>("issue_attachments", {
+      select: ATTACHMENT_SELECT,
+      filters: { issueId: `eq.${issueId}` },
+      order: "position.asc",
+    });
+  } catch (err) {
+    if (!(err instanceof SupabaseError)) throw err;
+    const rows = await selectAll<Omit<AttachmentRow, "source" | "externalUrl">>(
+      "issue_attachments",
+      {
+        select: ATTACHMENT_SELECT_LEGACY,
+        filters: { issueId: `eq.${issueId}` },
+        order: "position.asc",
+      },
+    );
+    return rows.map((r) => ({ ...r, source: "upload" as const, externalUrl: null }));
+  }
+}
+
 /** Load sections + attachments for one issue, with freshly-signed URLs. */
 async function loadSectionsAndAttachments(
   issueId: string,
 ): Promise<{ sections: IssueSection[]; attachments: IssueAttachment[] }> {
   const [sectionRows, attachmentRows] = await Promise.all([
     selectSectionRows(issueId),
-    selectAll<AttachmentRow>("issue_attachments", {
-      select: ATTACHMENT_SELECT,
-      filters: { issueId: `eq.${issueId}` },
-      order: "position.asc",
-    }),
+    selectAttachmentRows(issueId),
   ]);
 
-  const urlByPath = await signPaths(attachmentRows.map((a) => a.storagePath));
+  const urlByPath = await signPaths(
+    attachmentRows.filter((a) => a.source !== "drive").map((a) => a.storagePath ?? ""),
+  );
 
   const toAttachment = (a: AttachmentRow): IssueAttachment => ({
     id: a.id,
     kind: a.kind,
-    url: urlByPath[a.storagePath] ?? null,
+    source: a.source,
+    url: a.source === "drive" ? a.externalUrl : (a.storagePath ? urlByPath[a.storagePath] ?? null : null),
     storagePath: a.storagePath,
+    externalUrl: a.externalUrl,
     filename: a.filename,
     mime: a.mime,
     sizeBytes: a.sizeBytes,
@@ -348,7 +396,7 @@ async function replaceSectionsAndAttachments(
   sections: SectionInput[],
   topLevelAttachments: AttachmentInput[],
 ): Promise<void> {
-  const existing = await selectAll<{ storagePath: string }>(
+  const existing = await selectAll<{ storagePath: string | null }>(
     "issue_attachments",
     { select: "storagePath", filters: { issueId: `eq.${issueId}` } },
   );
@@ -400,7 +448,9 @@ async function replaceSectionsAndAttachments(
       issueId,
       sectionId: null,
       kind: a.kind,
-      storagePath: a.storagePath,
+      source: a.source ?? "upload",
+      storagePath: a.storagePath ?? null,
+      externalUrl: a.externalUrl ?? null,
       filename: a.filename,
       mime: a.mime,
       sizeBytes: a.sizeBytes,
@@ -417,7 +467,9 @@ async function replaceSectionsAndAttachments(
         issueId,
         sectionId,
         kind: a.kind,
-        storagePath: a.storagePath,
+        source: a.source ?? "upload",
+        storagePath: a.storagePath ?? null,
+        externalUrl: a.externalUrl ?? null,
         filename: a.filename,
         mime: a.mime,
         sizeBytes: a.sizeBytes,
@@ -428,17 +480,42 @@ async function replaceSectionsAndAttachments(
     });
   });
   if (attachmentRowsToInsert.length > 0) {
-    await insertRow("issue_attachments", attachmentRowsToInsert, {
-      returning: false,
-    });
+    try {
+      await insertRow("issue_attachments", attachmentRowsToInsert, {
+        returning: false,
+      });
+    } catch (err) {
+      // Pre-007-migration fallback: `source`/`externalUrl` don't exist on
+      // this DB yet. Upload-based rows still save fine without them (they
+      // read back as "upload" — see selectAttachmentRows above); a
+      // Drive-linked row has no storagePath and would violate the
+      // still-NOT-NULL column, so it's dropped rather than corrupting the
+      // whole save, and the caller is told which migration to run.
+      if (!(err instanceof SupabaseError)) throw err;
+      const uploadsOnly = attachmentRowsToInsert
+        .filter((r) => r.source !== "drive")
+        .map(({ source: _source, externalUrl: _externalUrl, ...rest }) => rest);
+      const droppedDriveCount = attachmentRowsToInsert.length - uploadsOnly.length;
+      if (uploadsOnly.length > 0) {
+        await insertRow("issue_attachments", uploadsOnly, { returning: false });
+      }
+      if (droppedDriveCount > 0) {
+        throw new Error(
+          "Google Drive attachments require the pending database migration " +
+            "(supabase/sql/007_attachment_drive_source.sql) to be applied first.",
+        );
+      }
+    }
   }
 
   const keptPaths = new Set(
-    attachmentRowsToInsert.map((r) => r.storagePath as string),
+    attachmentRowsToInsert
+      .map((r) => r.storagePath as string | null)
+      .filter((p): p is string => !!p),
   );
   const orphaned = existing
     .map((e) => e.storagePath)
-    .filter((p) => !keptPaths.has(p));
+    .filter((p): p is string => !!p && !keptPaths.has(p));
   if (orphaned.length > 0) {
     await deleteAttachmentFiles(orphaned).catch(() => {});
   }
@@ -610,7 +687,7 @@ export async function updateIssue(id: string, input: IssueInput) {
 }
 
 export async function deleteIssue(id: string) {
-  const attachments = await selectAll<{ storagePath: string }>(
+  const attachments = await selectAll<{ storagePath: string | null }>(
     "issue_attachments",
     { select: "storagePath", filters: { issueId: `eq.${id}` } },
   );
@@ -629,9 +706,9 @@ export async function deleteIssue(id: string) {
   );
   await deleteRows("issues", { id: `eq.${id}` }, { returning: false });
 
-  await deleteAttachmentFiles(attachments.map((a) => a.storagePath)).catch(
-    () => {},
-  );
+  await deleteAttachmentFiles(
+    attachments.map((a) => a.storagePath).filter((p): p is string => !!p),
+  ).catch(() => {});
 }
 
 function safeParseImages(raw: string | null | undefined): string[] {

@@ -57,7 +57,7 @@ export default async function RootLayout({
       <body className="flex min-h-screen flex-col bg-white text-ink-900">
         <NextIntlClientProvider messages={messages}>
           <header className="relative border-b border-slate-200 bg-white">
-            <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-3 px-4">
+            <div className="flex h-14 w-full items-center justify-between gap-3 px-5 sm:px-6 lg:px-12 xl:px-20 2xl:px-32">
               <Link
                 href="/"
                 className="flex min-w-0 items-center gap-2 font-semibold tracking-tight"
@@ -98,7 +98,7 @@ export default async function RootLayout({
               <MobileNav links={navLinks} menuLabel={t("menu")} />
             </div>
           </header>
-          <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:py-8">
+          <main className="w-full flex-1 px-5 py-6 sm:px-6 sm:py-8 lg:px-12 xl:px-20 2xl:px-32">
             {children}
           </main>
           <SiteFooter />

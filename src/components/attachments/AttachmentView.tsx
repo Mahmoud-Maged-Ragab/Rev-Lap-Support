@@ -2,11 +2,13 @@
 
 import { useState } from "react";
 import {
+  IconBrandGoogleDrive,
   IconFileTypeDoc,
   IconFileTypePdf,
   IconMaximize,
   IconPlayerPlayFilled,
 } from "@tabler/icons-react";
+import { driveEmbedUrl, driveThumbnailUrl, parseGoogleDriveUrl } from "@/lib/googleDrive";
 import { AttachmentViewerModal, type ViewerTarget } from "./AttachmentViewerModal";
 import { formatBytes, isDocx, type ViewAttachment } from "./types";
 
@@ -16,9 +18,53 @@ function toTarget(a: ViewAttachment): ViewerTarget {
     filename: a.filename,
     mime: a.mime,
     url: a.url,
+    source: a.source,
+    externalUrl: a.source === "drive" ? a.url : null,
     attachmentId: a.id,
     caption: a.caption,
   };
+}
+
+/** A Drive-hosted image can fail to load for a viewer without access — show
+ *  a clear message instead of a broken-image icon. */
+function DriveImage({ fileId, alt }: { fileId: string; alt: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div className="flex aspect-video w-full flex-col items-center justify-center gap-1.5 bg-slate-100 px-4 text-center text-xs text-slate-500">
+        <IconBrandGoogleDrive size={20} className="text-slate-400" />
+        <span>
+          This image couldn&apos;t be loaded from Google Drive. The file may need to
+          be shared as &quot;Anyone with the link can view&quot;.
+        </span>
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={driveThumbnailUrl(fileId)}
+      alt={alt}
+      className="max-h-[70vh] w-auto max-w-full object-contain"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
+/** Responsive 16:9 iframe wrapper for a Google Drive embed (video/pdf) —
+ *  width/height are never fixed pixels, so it scales with the issue
+ *  container at every viewport instead of overflowing on mobile. */
+function DriveEmbedFrame({ fileId, title }: { fileId: string; title: string }) {
+  return (
+    <div className="relative w-full overflow-hidden" style={{ paddingTop: "56.25%" }}>
+      <iframe
+        src={driveEmbedUrl(fileId)}
+        title={title}
+        allow="autoplay"
+        className="absolute inset-0 h-full w-full border-0"
+      />
+    </div>
+  );
 }
 
 /**
@@ -30,6 +76,40 @@ function toTarget(a: ViewAttachment): ViewerTarget {
  */
 function ImageBlock({ attachment, onOpen }: { attachment: ViewAttachment; onOpen: (target: ViewerTarget) => void }) {
   const a = attachment;
+  const driveId = a.source === "drive" && a.url ? parseGoogleDriveUrl(a.url)?.id : undefined;
+
+  if (a.source === "drive") {
+    return (
+      <figure className="card overflow-hidden">
+        {driveId ? (
+          <button
+            type="button"
+            onClick={() => onOpen(toTarget(a))}
+            className="group relative flex w-full items-center justify-center bg-slate-50"
+            aria-label={`Open ${a.filename} fullscreen`}
+          >
+            <DriveImage fileId={driveId} alt={a.caption ?? a.filename} />
+            <span className="pointer-events-none absolute inset-0 flex items-center justify-center bg-slate-900/0 transition group-hover:bg-slate-900/20">
+              <IconMaximize
+                size={28}
+                className="text-white opacity-0 drop-shadow transition group-hover:opacity-100"
+              />
+            </span>
+          </button>
+        ) : (
+          <div className="flex aspect-video w-full items-center justify-center bg-slate-100 text-xs text-slate-400">
+            This Google Drive link is invalid.
+          </div>
+        )}
+        {a.caption && (
+          <figcaption className="border-t border-slate-200 px-4 py-3 text-[15px] leading-relaxed text-slate-700">
+            {a.caption}
+          </figcaption>
+        )}
+      </figure>
+    );
+  }
+
   return (
     <figure className="card overflow-hidden">
       <button
@@ -71,6 +151,27 @@ function ImageBlock({ attachment, onOpen }: { attachment: ViewAttachment; onOpen
 
 function VideoBlock({ attachment }: { attachment: ViewAttachment }) {
   const a = attachment;
+
+  if (a.source === "drive") {
+    const driveId = a.url ? parseGoogleDriveUrl(a.url)?.id : undefined;
+    return (
+      <figure className="card overflow-hidden">
+        {driveId ? (
+          <DriveEmbedFrame fileId={driveId} title={a.filename} />
+        ) : (
+          <div className="flex aspect-video w-full items-center justify-center bg-slate-100 text-xs text-slate-400">
+            This Google Drive link is invalid.
+          </div>
+        )}
+        {a.caption && (
+          <figcaption className="border-t border-slate-200 px-4 py-3 text-[15px] leading-relaxed text-slate-700">
+            {a.caption}
+          </figcaption>
+        )}
+      </figure>
+    );
+  }
+
   return (
     <figure className="card overflow-hidden">
       {a.url ? (
@@ -107,7 +208,10 @@ function DocumentBlock({
 }) {
   const a = attachment;
   const Icon = a.kind === "pdf" ? IconFileTypePdf : IconFileTypeDoc;
-  const canPreview = a.kind === "pdf" || isDocx(a.mime, a.filename);
+  // A Drive-linked doc always previews via Google's own embeddable viewer,
+  // regardless of mime (Drive doesn't tell us .doc vs .docx vs native Google
+  // Doc from the URL alone — see ViewerBody in AttachmentViewerModal.tsx).
+  const canPreview = a.source === "drive" || a.kind === "pdf" || isDocx(a.mime, a.filename);
 
   return (
     <button
@@ -125,11 +229,12 @@ function DocumentBlock({
         <Icon size={28} />
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-semibold text-ink-900 sm:text-base">
-          {a.filename}
+        <span className="flex min-w-0 items-center gap-1.5 truncate text-sm font-semibold text-ink-900 sm:text-base">
+          {a.source === "drive" && <IconBrandGoogleDrive size={14} className="shrink-0 text-slate-400" />}
+          <span className="truncate">{a.filename}</span>
         </span>
         <span className="mt-0.5 block text-xs text-slate-500">
-          {formatBytes(a.sizeBytes)}
+          {a.source === "drive" ? "Google Drive" : formatBytes(a.sizeBytes)}
           {canPreview && " · Click to preview"}
         </span>
         {a.caption && (
@@ -162,7 +267,7 @@ export function AttachmentGrid({ attachments }: { attachments: ViewAttachment[] 
         </div>
       )}
       {videos.length > 0 && (
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="space-y-4">
           {videos.map((a) => (
             <VideoBlock key={a.id} attachment={a} />
           ))}

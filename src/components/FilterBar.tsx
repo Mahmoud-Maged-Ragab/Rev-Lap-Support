@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
+import { useMemo } from "react";
 import { useTranslations } from "next-intl";
+import { MultiSelectDropdown } from "@/components/ui/MultiSelectDropdown";
 
 type Item = { id: string; name: string; _count?: number };
 
@@ -25,53 +27,40 @@ export function FilterBar({
   }
 
   const cat = params.get("category") ?? "";
-  const tag = params.get("tag") ?? "";
+  const tagsParam = params.get("tags") ?? "";
+  const selectedTagIds = useMemo(
+    () => new Set(tagsParam.split(",").filter(Boolean)),
+    [tagsParam],
+  );
+
+  function setTags(next: Set<string>) {
+    setParam("tags", next.size > 0 ? Array.from(next).join(",") : null);
+  }
 
   return (
     <aside className="space-y-4 md:space-y-6">
-      {/* Mobile / narrow layout: compact selects instead of a tall list. */}
-      <div className="grid grid-cols-2 gap-2 md:hidden">
-        <div>
-          <label htmlFor="filter-category-mobile" className="sr-only">
-            {t("categories")}
-          </label>
-          <select
-            id="filter-category-mobile"
-            className="select"
-            value={cat}
-            onChange={(e) => setParam("category", e.target.value || null)}
-          >
-            <option value="">{t("allCategories")}</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-                {typeof c._count === "number" ? ` (${c._count})` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div>
-          <label htmlFor="filter-tag-mobile" className="sr-only">
-            {t("tags")}
-          </label>
-          <select
-            id="filter-tag-mobile"
-            className="select"
-            value={tag}
-            onChange={(e) => setParam("tag", e.target.value || null)}
-          >
-            <option value="">{t("allTags")}</option>
-            {tags.map((tg) => (
-              <option key={tg.id} value={tg.id}>
-                {tg.name}
-              </option>
-            ))}
-          </select>
-        </div>
+      {/* Mobile / narrow layout: compact select instead of a tall list. */}
+      <div className="md:hidden">
+        <label htmlFor="filter-category-mobile" className="sr-only">
+          {t("categories")}
+        </label>
+        <select
+          id="filter-category-mobile"
+          className="select"
+          value={cat}
+          onChange={(e) => setParam("category", e.target.value || null)}
+        >
+          <option value="">{t("allCategories")}</option>
+          {categories.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+              {typeof c._count === "number" ? ` (${c._count})` : ""}
+            </option>
+          ))}
+        </select>
       </div>
 
-      {/* Desktop / wide layout: unchanged list + chip picker. */}
+      {/* Desktop / wide layout: unchanged category list. */}
       <div className="hidden md:block">
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           {t("categories")}
@@ -107,34 +96,19 @@ export function FilterBar({
         </ul>
       </div>
 
-      <div className="hidden md:block">
+      {/* Tags: searchable multi-select, shared with the admin issue form. */}
+      <div>
         <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
           {t("tags")}
         </div>
-        <div className="flex flex-wrap gap-1.5">
-          {tag && (
-            <button
-              onClick={() => setParam("tag", null)}
-              className="chip border-slate-300 bg-white"
-            >
-              {t("clear")}
-            </button>
-          )}
-          {tags.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setParam("tag", t.id)}
-              className={
-                "chip cursor-pointer " +
-                (tag === t.id
-                  ? "!border-slate-900 !bg-slate-900 !text-white"
-                  : "")
-              }
-            >
-              {t.name}
-            </button>
-          ))}
-        </div>
+        <MultiSelectDropdown
+          options={tags.map((tg) => ({ id: tg.id, label: tg.name }))}
+          selectedIds={selectedTagIds}
+          onChange={setTags}
+          placeholder={t("allTags")}
+          searchPlaceholder={t("searchTags")}
+          emptyText={t("noTagsFound")}
+        />
       </div>
     </aside>
   );

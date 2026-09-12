@@ -27,7 +27,7 @@ export default async function AdminUsersPage() {
   const stats = await getDashboardStats(admins);
 
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="space-y-5">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">{t("title")}</h1>
         <p className="text-sm text-slate-500">{t("subtitle")}</p>

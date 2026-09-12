@@ -2,7 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { IconCheck, IconLoader2, IconRefresh } from "@tabler/icons-react";
+import { AttachmentSourceTabs, type AttachmentSourceMode } from "@/components/attachments/AttachmentSourceTabs";
 import { AttachmentViewerModal, type ViewerTarget } from "@/components/attachments/AttachmentViewerModal";
+import { DriveLinkInput } from "@/components/attachments/DriveLinkInput";
+import { driveEmbedUrl, parseGoogleDriveUrl } from "@/lib/googleDrive";
 import { uploadFileWithProgress } from "@/components/attachments/uploadFile";
 import { formatBytes, type DraftAttachment } from "@/components/attachments/types";
 
@@ -32,6 +35,7 @@ export function VideoAttachmentField({
   const fileRef = useRef<HTMLInputElement>(null);
   const [pickError, setPickError] = useState<string | null>(null);
   const [viewerTarget, setViewerTarget] = useState<ViewerTarget | null>(null);
+  const [sourceMode, setSourceMode] = useState<AttachmentSourceMode>("upload");
 
   // See AttachmentUploader.tsx for why patch() must read/write a ref rather
   // than close over the `attachments` prop directly (concurrent uploads
@@ -123,24 +127,48 @@ export function VideoAttachmentField({
     }
   }
 
+  function addDriveVideo(url: string) {
+    if (!parseGoogleDriveUrl(url)) return;
+    const draft: DraftAttachment = {
+      clientId: newClientId(),
+      kind: "video",
+      source: "drive",
+      filename: "Google Drive video",
+      mime: "video/*",
+      sizeBytes: 0,
+      caption: "",
+      storagePath: null,
+      externalUrl: url,
+      previewUrl: url,
+      status: "ready",
+    };
+    applyChange((prev) => [...prev, draft]);
+  }
+
   return (
     <div className="space-y-4">
-      <div>
-        <input
-          ref={fileRef}
-          id={`${idPrefix}-video-input`}
-          type="file"
-          accept="video/mp4,video/webm,video/quicktime"
-          multiple
-          onChange={(e) => {
-            if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
-            e.target.value = "";
-          }}
-          className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white hover:file:bg-slate-800"
-        />
-        <p className="mt-1 text-xs text-slate-500">mp4, webm, or mov — multiple allowed.</p>
-        {pickError && <p className="mt-1 text-xs text-red-700">{pickError}</p>}
-      </div>
+      <AttachmentSourceTabs value={sourceMode} onChange={setSourceMode} />
+
+      {sourceMode === "upload" ? (
+        <div>
+          <input
+            ref={fileRef}
+            id={`${idPrefix}-video-input`}
+            type="file"
+            accept="video/mp4,video/webm,video/quicktime"
+            multiple
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) handleFiles(e.target.files);
+              e.target.value = "";
+            }}
+            className="block w-full text-sm file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-white hover:file:bg-slate-800"
+          />
+          <p className="mt-1 text-xs text-slate-500">mp4, webm, or mov — multiple allowed.</p>
+          {pickError && <p className="mt-1 text-xs text-red-700">{pickError}</p>}
+        </div>
+      ) : (
+        <DriveLinkInput kind="video" onAdd={({ url }) => addDriveVideo(url)} />
+      )}
 
       {attachments.length > 0 && (
         <div className="space-y-4">
@@ -170,6 +198,13 @@ export function VideoAttachmentField({
                       <IconRefresh size={12} /> Retry
                     </button>
                   </div>
+                ) : a.source === "drive" ? (
+                  <iframe
+                    src={driveEmbedUrl(parseGoogleDriveUrl(a.previewUrl)?.id ?? "")}
+                    className="aspect-video w-full"
+                    allow="autoplay"
+                    title={a.filename}
+                  />
                 ) : (
                   <video
                     src={a.previewUrl}
@@ -193,10 +228,10 @@ export function VideoAttachmentField({
               <div className="flex items-center justify-between text-xs text-slate-500">
                 <span className="truncate">{a.filename}</span>
                 <span className="flex shrink-0 items-center gap-2">
-                  <span>{formatBytes(a.sizeBytes)}</span>
+                  {a.source !== "drive" && <span>{formatBytes(a.sizeBytes)}</span>}
                   {a.status === "ready" && (
                     <span className="flex items-center gap-0.5 font-medium text-emerald-600">
-                      <IconCheck size={12} /> Uploaded
+                      <IconCheck size={12} /> {a.source === "drive" ? "Linked" : "Uploaded"}
                     </span>
                   )}
                 </span>

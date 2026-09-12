@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FIELD_KEYS, REQUIRED_FIELD_KEYS } from "./issueFormFields";
+import { isGoogleDriveUrl } from "./googleDrive";
 
 export const LoginSchema = z.object({
   email: z.string().email().max(200),
@@ -9,25 +10,64 @@ export const LoginSchema = z.object({
 export const AttachmentKindSchema = z.enum(["image", "video", "pdf", "document"]);
 export type AttachmentKind = z.infer<typeof AttachmentKindSchema>;
 
+export const AttachmentSourceSchema = z.enum(["upload", "drive"]);
+export type AttachmentSource = z.infer<typeof AttachmentSourceSchema>;
+
 /**
- * One uploaded file, already sitting in storage (see POST /api/upload) by
- * the time it's referenced here. `id` is present when this is an existing
- * attachment being kept across an edit; omitted for a newly uploaded one.
+ * One attachment, either already sitting in storage (see POST /api/upload)
+ * or a Google Drive link (`source: "drive"`, no storagePath — see
+ * lib/googleDrive.ts). `id` is present when this is an existing attachment
+ * being kept across an edit; omitted for a newly added one.
  */
-export const AttachmentInputSchema = z.object({
-  id: z.string().optional(),
-  kind: AttachmentKindSchema,
-  storagePath: z.string().min(1).max(500),
-  filename: z.string().min(1).max(255),
-  mime: z.string().min(1).max(150),
-  sizeBytes: z.number().int().min(0).max(200 * 1024 * 1024),
-  caption: z
-    .string()
-    .max(500)
-    .optional()
-    .nullable()
-    .transform((v) => (v && v.trim() ? v.trim() : null)),
-});
+export const AttachmentInputSchema = z
+  .object({
+    id: z.string().optional(),
+    kind: AttachmentKindSchema,
+    source: AttachmentSourceSchema.optional().default("upload"),
+    storagePath: z.string().min(1).max(500).optional().nullable(),
+    externalUrl: z.string().max(2000).optional().nullable(),
+    filename: z.string().min(1).max(255),
+    mime: z.string().min(1).max(150),
+    sizeBytes: z.number().int().min(0).max(200 * 1024 * 1024),
+    caption: z
+      .string()
+      .max(500)
+      .optional()
+      .nullable()
+      .transform((v) => (v && v.trim() ? v.trim() : null)),
+  })
+  .superRefine((v, ctx) => {
+    if (v.source === "upload") {
+      if (!v.storagePath) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "storagePath is required for uploaded attachments",
+          path: ["storagePath"],
+        });
+      }
+    } else if (v.source === "drive") {
+      if (!v.externalUrl || !isGoogleDriveUrl(v.externalUrl)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "externalUrl must be a valid Google Drive share link",
+          path: ["externalUrl"],
+        });
+      }
+      if (
+        v.kind !== "image" &&
+        v.kind !== "video" &&
+        v.kind !== "pdf" &&
+        v.kind !== "document"
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            "Google Drive links are only supported for image, video, pdf, and document attachments",
+          path: ["kind"],
+        });
+      }
+    }
+  });
 export type AttachmentInput = z.infer<typeof AttachmentInputSchema>;
 
 /**

@@ -3,7 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { IconPaperclip } from "@tabler/icons-react";
 import { AttachmentCard } from "./AttachmentCard";
+import { AttachmentSourceTabs, type AttachmentSourceMode } from "./AttachmentSourceTabs";
 import { AttachmentViewerModal, type ViewerTarget } from "./AttachmentViewerModal";
+import { DriveLinkInput } from "./DriveLinkInput";
+import { driveThumbnailUrl, parseGoogleDriveUrl } from "@/lib/googleDrive";
 import { uploadFileWithProgress } from "./uploadFile";
 import type { DraftAttachment } from "./types";
 
@@ -62,7 +65,19 @@ export function AttachmentUploader({
   const inputRef = useRef<HTMLInputElement>(null);
   const [viewerTarget, setViewerTarget] = useState<ViewerTarget | null>(null);
   const [pickError, setPickError] = useState<string | null>(null);
+  const [sourceMode, setSourceMode] = useState<AttachmentSourceMode>("upload");
   const accept = allowedKinds.map((k) => ACCEPT_BY_KIND[k]).join(",");
+
+  // Drive links are only meaningful for a single-kind field restricted to
+  // image, pdf, or document (video has its own dedicated
+  // VideoAttachmentField) — the generic multi-kind uploader (legacy
+  // sections) keeps upload-only, since there'd be no way to know which kind
+  // a pasted link should become.
+  const driveKind: "image" | "pdf" | "document" | null =
+    allowedKinds.length === 1 &&
+    (allowedKinds[0] === "image" || allowedKinds[0] === "pdf" || allowedKinds[0] === "document")
+      ? allowedKinds[0]
+      : null;
 
   const attachmentsRef = useRef(attachments);
   useEffect(() => {
@@ -155,32 +170,67 @@ export function AttachmentUploader({
     }
   }
 
+  function addDriveAttachment(url: string) {
+    if (!driveKind) return;
+    const fileId = parseGoogleDriveUrl(url)?.id;
+    if (!fileId) return;
+    const draft: DraftAttachment = {
+      clientId: newClientId(),
+      kind: driveKind,
+      source: "drive",
+      filename: `Google Drive ${driveKind}`,
+      mime:
+        driveKind === "pdf"
+          ? "application/pdf"
+          : driveKind === "document"
+            ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            : "image/*",
+      sizeBytes: 0,
+      caption: "",
+      storagePath: null,
+      externalUrl: url,
+      previewUrl: driveKind === "image" ? driveThumbnailUrl(fileId) : url,
+      status: "ready",
+    };
+    applyChange((prev) => [...prev, draft]);
+  }
+
   return (
     <div className="space-y-2.5">
-      <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className="btn btn-outline btn-sm"
-          onClick={() => inputRef.current?.click()}
-        >
-          <IconPaperclip size={15} className="mr-1.5" /> {label}
-        </button>
-        <span className="text-xs text-slate-500">{hint}</span>
-        <input
-          ref={inputRef}
-          id={`${idPrefix}-file-input`}
-          type="file"
-          accept={accept}
-          multiple
-          className="hidden"
-          onChange={(e) => {
-            if (e.target.files && e.target.files.length > 0) {
-              handleFiles(e.target.files);
-            }
-            e.target.value = "";
-          }}
-        />
-      </div>
+      {driveKind && (
+        <AttachmentSourceTabs value={sourceMode} onChange={setSourceMode} />
+      )}
+
+      {(!driveKind || sourceMode === "upload") && (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn btn-outline btn-sm"
+            onClick={() => inputRef.current?.click()}
+          >
+            <IconPaperclip size={15} className="mr-1.5" /> {label}
+          </button>
+          <span className="text-xs text-slate-500">{hint}</span>
+          <input
+            ref={inputRef}
+            id={`${idPrefix}-file-input`}
+            type="file"
+            accept={accept}
+            multiple
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files && e.target.files.length > 0) {
+                handleFiles(e.target.files);
+              }
+              e.target.value = "";
+            }}
+          />
+        </div>
+      )}
+
+      {driveKind && sourceMode === "drive" && (
+        <DriveLinkInput kind={driveKind} onAdd={({ url }) => addDriveAttachment(url)} />
+      )}
 
       {pickError && <p className="text-xs text-red-700">{pickError}</p>}
 
@@ -201,6 +251,8 @@ export function AttachmentUploader({
                   url: a.previewUrl || null,
                   attachmentId: a.id ?? null,
                   storagePath: a.storagePath,
+                  source: a.source,
+                  externalUrl: a.externalUrl ?? null,
                   caption: a.caption,
                 })
               }

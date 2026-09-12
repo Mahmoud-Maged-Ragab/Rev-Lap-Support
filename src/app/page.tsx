@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 type SearchParams = {
   q?: string;
   category?: string;
-  tag?: string;
+  tags?: string;
   sort?: "newest" | "oldest" | "views";
   page?: string;
 };
@@ -30,12 +30,15 @@ export default async function Home({
 }) {
   const page = Number(searchParams.page ?? "1") || 1;
   const pageSize = 15;
+  const tagIds = searchParams.tags
+    ? searchParams.tags.split(",").filter(Boolean)
+    : [];
 
   const [{ items, total }, categoriesRaw, tags] = await Promise.all([
     listIssues({
       q: searchParams.q,
       categoryId: searchParams.category,
-      tagId: searchParams.tag,
+      tagIds,
       sort: searchParams.sort ?? "newest",
       page,
       pageSize,
@@ -44,10 +47,11 @@ export default async function Home({
       select: "id,name,issues(count)",
       order: "name.asc",
     }),
+    // No limit: the tag selector filters/searches client-side, so it needs
+    // the full list to search against.
     selectAll<TagRow>("tags", {
       select: "id,name",
       order: "name.asc",
-      limit: 30,
     }),
   ]);
 
@@ -63,6 +67,10 @@ export default async function Home({
   );
 
   const t = await getTranslations("home");
+  const tf = await getTranslations("filters");
+  const hasActiveFilters = Boolean(
+    searchParams.q || searchParams.category || tagIds.length > 0,
+  );
 
   return (
     <div className="space-y-8">
@@ -85,6 +93,11 @@ export default async function Home({
                 <> {t("searchedFor", { query: searchParams.q })}</>
               ) : null}
             </div>
+            {hasActiveFilters && (
+              <Link href="/" className="font-medium text-accent hover:underline">
+                {tf("clearAll")}
+              </Link>
+            )}
           </div>
 
           <IssueList items={items} />

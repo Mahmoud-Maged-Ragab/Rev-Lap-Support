@@ -16,7 +16,7 @@ export default async function NewIssuePage() {
     getIssueFormConfig(),
   ]);
   return (
-    <div className="max-w-3xl space-y-5">
+    <div className="max-w-[1400px] space-y-5">
       <div>
         <h1 className="text-lg font-semibold tracking-tight">New issue</h1>
         <p className="text-sm text-slate-500">Document a problem and its known fix.</p>

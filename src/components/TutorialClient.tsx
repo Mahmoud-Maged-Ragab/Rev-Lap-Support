@@ -222,7 +222,7 @@ export default function TutorialClient({ auth }: { auth: TutorialAuth }) {
     <div className="space-y-8">
       {/* Navigation */}
       <div className="sticky top-0 z-10 bg-white/80 backdrop-blur-sm border-b border-slate-200">
-        <div className="mx-auto max-w-6xl px-4 py-4 flex flex-wrap items-center justify-between gap-4">
+        <div className="w-full px-5 py-4 sm:px-6 lg:px-12 xl:px-20 2xl:px-32 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-bold text-ink-900">System Guide</h1>
             <p className="text-sm text-slate-600">
@@ -274,7 +274,7 @@ export default function TutorialClient({ auth }: { auth: TutorialAuth }) {
         </div>
 
         {/* Table of Contents */}
-        <div className="mx-auto max-w-6xl px-4 py-2 border-t border-slate-200 bg-slate-50">
+        <div className="w-full px-5 py-2 sm:px-6 lg:px-12 xl:px-20 2xl:px-32 border-t border-slate-200 bg-slate-50">
           <div className="flex flex-wrap gap-2 text-xs">
             <a
               href="#quick-start"
