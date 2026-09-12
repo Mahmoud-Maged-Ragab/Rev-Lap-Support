@@ -18,17 +18,22 @@ type TargetRow = {
   disabled?: boolean | null;
 };
 
-/** Case-insensitive count of accounts with the given canonical role. */
+/**
+ * Case-insensitive count of accounts with the given canonical role.
+ *
+ * `role` is a Postgres enum column (not text), so PostgREST's `ilike.` filter
+ * can't be pushed down to the DB — enums have no `~~*` operator, which is what
+ * produced `operator does not exist: "Role" ~~* unknown`. Fetch the (small)
+ * admins table and compare with the same `normalizeRole` used everywhere else,
+ * so legacy mixed-case rows ("Support", "Owner") still match correctly.
+ */
 async function countByRole(role: Role, opts: { activeOnly?: boolean } = {}): Promise<number> {
-  const filters: Record<string, string> = { role: `ilike.${role}` };
-  if (opts.activeOnly) filters.disabled = "is.false";
-  const { count } = await selectRows("admins", {
-    select: "id",
-    filters,
-    limit: 1,
-    count: "exact",
+  const { data } = await selectRows<{ role: string; disabled?: boolean | null }>("admins", {
+    select: "role,disabled",
   });
-  return count ?? 0;
+  return data.filter(
+    (r) => normalizeRole(r.role) === role && (!opts.activeOnly || !r.disabled)
+  ).length;
 }
 
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
@@ -61,6 +66,16 @@ export async function DELETE(req: Request, { params }: { params: { id: string } 
   if (targetRole === "ADMIN" && (await countByRole("ADMIN")) <= 1) {
     return NextResponse.json({ error: "Cannot delete the last remaining admin" }, { status: 400 });
   }
+
+  // `issues.admin_id` (creator) and `issue_history.adminid` (actor) both have a
+  // foreign key to admins with no ON DELETE action, so the delete below 409s
+  // with `violates foreign key constraint ... on table "issues"` unless those
+  // references are cleared first. Nulling them preserves the issues/history
+  // rows themselves — only the "authored/acted by" attribution is lost, which
+  // is expected once the account is gone (the audit log below still records
+  // who was deleted and by whom).
+  await updateRows("issues", { admin_id: `eq.${params.id}` }, { admin_id: null }, { returning: false });
+  await updateRows("issue_history", { adminid: `eq.${params.id}` }, { adminid: null }, { returning: false });
 
   await deleteRows("admins", { id: `eq.${params.id}` }, { returning: false });
   await auditLog({

@@ -74,7 +74,14 @@ function VideoBlock({ attachment }: { attachment: ViewAttachment }) {
   return (
     <figure className="card overflow-hidden">
       {a.url ? (
-        <video src={a.url} controls preload="metadata" className="aspect-video w-full bg-black" />
+        <video
+          src={a.url}
+          controls
+          preload="metadata"
+          playsInline
+          webkit-playsinline="true"
+          className="aspect-video w-full bg-black"
+        />
       ) : (
         <div className="flex aspect-video w-full items-center justify-center bg-slate-100 text-xs text-slate-400">
           <IconPlayerPlayFilled size={20} />

@@ -175,6 +175,8 @@ export function VideoAttachmentField({
                     src={a.previewUrl}
                     controls
                     preload="metadata"
+                    playsInline
+                    webkit-playsinline="true"
                     className="w-full cursor-pointer"
                     onClick={() =>
                       setViewerTarget({

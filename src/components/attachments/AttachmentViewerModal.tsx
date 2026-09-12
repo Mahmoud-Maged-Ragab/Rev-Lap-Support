@@ -122,7 +122,8 @@ function ViewerBody({ target }: { target: ViewerTarget }) {
           <video
             src={target.url}
             controls
-            autoPlay
+            playsInline
+            webkit-playsinline="true"
             className="max-h-full max-w-full rounded"
           />
         ) : (
